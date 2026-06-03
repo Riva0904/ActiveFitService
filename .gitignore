@@ -1,0 +1,16 @@
+# Environment files — never commit these
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Build output
+dist/
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# Uploads (local disk, not for git)
+uploads/
