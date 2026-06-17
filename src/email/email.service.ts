@@ -1,7 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
-import { Transporter } from 'nodemailer';
 
 export interface SendMailOptions {
   to: string;
@@ -11,38 +9,37 @@ export interface SendMailOptions {
 
 @Injectable()
 export class EmailService {
-  private transporter: Transporter;
   private readonly logger = new Logger(EmailService.name);
   private readonly fromName = 'ActiveBoost';
   private readonly fromEmail: string;
+  private readonly resendApiKey: string;
 
   constructor(private configService: ConfigService) {
-    this.fromEmail = this.configService.get<string>('SMTP_USER', 'activeboost8@gmail.com');
-
-    const smtpPort = this.configService.get<number>('SMTP_PORT', 587);
-    this.transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('SMTP_HOST', 'smtp.gmail.com'),
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: this.fromEmail,
-        pass: this.configService.get<string>('SMTP_PASS'),
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
-    });
+    this.fromEmail = this.configService.get<string>('EMAIL_FROM_ADDRESS', 'onboarding@resend.dev');
+    this.resendApiKey = this.configService.get<string>('RESEND_API_KEY', '');
   }
 
   async sendMail(options: SendMailOptions): Promise<boolean> {
     try {
-      const info = await this.transporter.sendMail({
-        from: `"${this.fromName}" <${this.fromEmail}>`,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: `${this.fromName} <${this.fromEmail}>`,
+          to: options.to,
+          subject: options.subject,
+          html: options.html,
+        }),
       });
-      this.logger.log(`Email sent to ${options.to}: ${info.messageId}`);
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Resend API ${res.status}: ${body}`);
+      }
+      const data = (await res.json()) as { id: string };
+      this.logger.log(`Email sent to ${options.to}: ${data.id}`);
       return true;
     } catch (err) {
       this.logger.error(`Failed to send email to ${options.to}: ${err.message}`);
@@ -315,12 +312,17 @@ export class EmailService {
   }
 
   async verifyConnection(): Promise<boolean> {
+    if (!this.resendApiKey) {
+      this.logger.error('RESEND_API_KEY not configured');
+      return false;
+    }
     try {
-      await this.transporter.verify();
-      this.logger.log('SMTP connection verified successfully');
-      return true;
+      const res = await fetch('https://api.resend.com/domains', {
+        headers: { Authorization: `Bearer ${this.resendApiKey}` },
+      });
+      return res.ok;
     } catch (err) {
-      this.logger.error(`SMTP verification failed: ${err.message}`);
+      this.logger.error(`Resend verification failed: ${err.message}`);
       return false;
     }
   }
