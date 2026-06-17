@@ -19,10 +19,11 @@ export class EmailService {
   constructor(private configService: ConfigService) {
     this.fromEmail = this.configService.get<string>('SMTP_USER', 'activeboost8@gmail.com');
 
+    const smtpPort = this.configService.get<number>('SMTP_PORT', 587);
     this.transporter = nodemailer.createTransport({
       host: this.configService.get<string>('SMTP_HOST', 'smtp.gmail.com'),
-      port: this.configService.get<number>('SMTP_PORT', 587),
-      secure: false,
+      port: smtpPort,
+      secure: smtpPort === 465,
       auth: {
         user: this.fromEmail,
         pass: this.configService.get<string>('SMTP_PASS'),
