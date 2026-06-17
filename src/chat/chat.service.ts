@@ -43,6 +43,7 @@ export class ChatService {
       where: { gymId, type: 'GYM' },
       include: GYM_INCLUDE,
       orderBy: { lastMessageAt: 'desc' },
+      take: 200,
     });
   }
 
@@ -142,6 +143,7 @@ export class ChatService {
         gym: { select: { id: true, name: true, logo: true } },
       },
       orderBy: { lastMessageAt: 'desc' },
+      take: 200,
     });
   }
 

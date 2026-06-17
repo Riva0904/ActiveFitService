@@ -4,12 +4,14 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
+import { AuditService } from '../common/services/audit.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private prisma: PrismaService,
     private emailService: EmailService,
+    private auditService: AuditService,
   ) {}
 
   private async checkPlanLimits(gymId: string, targetRole: string): Promise<void> {
@@ -284,13 +286,36 @@ export class UsersService {
     return this.prisma.user.update({ where: { id }, data: { isActive: false } });
   }
 
+  /** Data-portability export of everything directly owned by the requesting user. */
+  async exportOwnData(id: string) {
+    const data = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true, email: true, phone: true, firstName: true, lastName: true, role: true,
+        avatar: true, dateOfBirth: true, gender: true, address: true, city: true, state: true,
+        pincode: true, country: true, timezone: true, emergencyContact: true,
+        createdAt: true, updatedAt: true, lastLoginAt: true,
+        member: true,
+        trainer: true,
+        staff: true,
+        notifications: true,
+        leaveRequests: true,
+        attendanceRecords: true,
+        supplementOrders: true,
+        invoices: true,
+      },
+    });
+    if (!data) throw new NotFoundException('User not found');
+    return data;
+  }
+
   async activate(id: string) {
     await this.findOne(id);
     return this.prisma.user.update({ where: { id }, data: { isActive: true } });
   }
 
   async remove(id: string) {
-    await this.findOne(id);
+    const snapshot = await this.findOne(id);
     await this.prisma.$transaction(async (tx) => {
       const trainer = await tx.trainer.findUnique({ where: { userId: id } });
       if (trainer) {
@@ -322,6 +347,18 @@ export class UsersService {
 
       await tx.user.delete({ where: { id } });
     });
+
+    // Logged after the transaction (not inside it) — the deleteMany above wipes audit rows
+    // authored by this user (as required for erasure), but this entry records the erasure
+    // event itself, so the deletion is traceable even though the actor record is gone.
+    await this.auditService.log({
+      action: 'USER_ERASED',
+      entity: 'User',
+      entityId: id,
+      gymId: snapshot.gymId ?? undefined,
+      oldValues: snapshot,
+    });
+
     return { id };
   }
 

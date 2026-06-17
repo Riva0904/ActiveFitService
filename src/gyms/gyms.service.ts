@@ -81,7 +81,7 @@ export class GymsService {
 
     const [totalMembers, activeMembers, todayAttendance, monthlyRevenue, pendingPayments] =
       await Promise.all([
-        this.prisma.user.count({ where: { gymId, role: 'MEMBER' } }),
+        this.prisma.member.count({ where: { gymId, deletedAt: null } }),
         this.prisma.memberSubscription.count({ where: { gymId, status: 'ACTIVE' } }),
         this.prisma.attendance.count({ where: { gymId, checkInTime: { gte: today } } }),
         this.prisma.payment.aggregate({

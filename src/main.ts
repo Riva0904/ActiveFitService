@@ -7,6 +7,7 @@ import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 import express from 'express';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -29,6 +30,7 @@ async function bootstrap() {
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
   app.set('trust proxy', 1);
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  app.use(compression());
   app.use(cookieParser());
 
   const corsOrigin = configService.get('CORS_ORIGIN', 'http://localhost:3000');

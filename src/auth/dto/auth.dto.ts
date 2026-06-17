@@ -1,6 +1,13 @@
-import { IsEmail, IsString, MinLength, IsOptional, IsEnum, Length, Matches } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsOptional, IsEnum, Length, Matches, IsPhoneNumber } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
+
+// Strips spaces from phone input so legacy-style formatting (e.g. '+91 9876543210')
+// still passes IsPhoneNumber('IN'), which expects no internal whitespace.
+const stripPhoneSpaces = Transform(({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.replace(/\s+/g, '') : value,
+);
 
 export class RegisterDto {
   @ApiProperty({ example: 'John' })
@@ -17,7 +24,8 @@ export class RegisterDto {
 
   @ApiProperty({ example: '+91 9876543210', required: false })
   @IsOptional()
-  @IsString()
+  @stripPhoneSpaces
+  @IsPhoneNumber('IN')
   phone?: string;
 
   @ApiProperty({ example: 'Password@123', minLength: 8 })
@@ -99,7 +107,7 @@ export class RegisterGymDto {
   @IsString() firstName: string;
   @IsString() lastName: string;
   @IsEmail() email: string;
-  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @stripPhoneSpaces @IsPhoneNumber('IN') phone?: string;
   @IsString() @MinLength(8)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, { message: 'Password must contain uppercase, lowercase, and number' })
   password: string;
@@ -109,7 +117,7 @@ export class RegisterGymDto {
   @IsString() gymState: string;
   @IsString() gymPincode: string;
   @IsOptional() @IsString() gymEmail?: string;
-  @IsOptional() @IsString() gymPhone?: string;
+  @IsOptional() @stripPhoneSpaces @IsPhoneNumber('IN') gymPhone?: string;
   @IsOptional() @IsString() gymDescription?: string;
 }
 

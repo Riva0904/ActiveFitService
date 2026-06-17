@@ -59,7 +59,13 @@ export class PaymentEventsHandler {
     }
 
     if (event.promoCodeId) {
-      await this.promoCodesService.incrementUsage(event.promoCodeId);
+      const ok = await this.promoCodesService.incrementUsage(event.promoCodeId);
+      if (!ok) {
+        this.logger.warn(
+          `Promo code ${event.promoCodeId} usage limit hit by a concurrent payment — ` +
+          `payment ${event.paymentId} already completed with discount applied; flag for manual review`,
+        );
+      }
     }
   }
 
@@ -116,6 +122,7 @@ export class PaymentEventsHandler {
   private async handlePlatformCommission(event: PaymentCompletedEvent) {
     const gymSub = await this.prisma.gymSubscription.findFirst({
       where: { gymId: event.gymId, status: 'ACTIVE' },
+      orderBy: { createdAt: 'desc' },
       include: { plan: { select: { commissionPct: true } } },
     });
     const commissionPct = (gymSub?.plan as any)?.commissionPct ?? 0;

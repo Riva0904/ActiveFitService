@@ -35,6 +35,12 @@ export class UsersController {
     return this.usersService.findOne(id);
   }
 
+  @Get('me/export')
+  @ApiOperation({ summary: 'Export all of the requesting user\'s own data (data portability)' })
+  exportMyData(@CurrentUser('id') id: string) {
+    return this.usersService.exportOwnData(id);
+  }
+
   @Get('stats')
   @Roles(Role.GYM_ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get member stats' })

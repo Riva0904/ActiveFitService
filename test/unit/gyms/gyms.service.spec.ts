@@ -29,7 +29,9 @@ const mockPrisma = {
     count: jest.fn(),
   },
   user: { count: jest.fn() },
+  member: { count: jest.fn() },
   membership: { count: jest.fn() },
+  memberSubscription: { count: jest.fn() },
   attendance: { count: jest.fn() },
   payment: {
     aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 50000 } }),
@@ -185,8 +187,8 @@ describe('GymsService', () => {
 
   describe('getStats', () => {
     it('should return gym statistics', async () => {
-      mockPrisma.user.count.mockResolvedValue(150);
-      mockPrisma.membership.count.mockResolvedValue(120);
+      mockPrisma.member.count.mockResolvedValue(150);
+      mockPrisma.memberSubscription.count.mockResolvedValue(120);
       mockPrisma.attendance.count.mockResolvedValue(45);
       mockPrisma.payment.aggregate.mockResolvedValue({ _sum: { amount: 75000 } });
       mockPrisma.payment.count.mockResolvedValue(3);
@@ -198,11 +200,14 @@ describe('GymsService', () => {
       expect(result.todayAttendance).toBe(45);
       expect(result.monthlyRevenue).toBe(75000);
       expect(result.pendingPayments).toBe(3);
+      // totalMembers must come from Member (deletedAt: null), not raw User count —
+      // regression guard for the earlier fix that made these consistent.
+      expect(mockPrisma.member.count).toHaveBeenCalledWith({ where: { gymId: 'gym-001', deletedAt: null } });
     });
 
     it('should return 0 for missing revenue data', async () => {
-      mockPrisma.user.count.mockResolvedValue(0);
-      mockPrisma.membership.count.mockResolvedValue(0);
+      mockPrisma.member.count.mockResolvedValue(0);
+      mockPrisma.memberSubscription.count.mockResolvedValue(0);
       mockPrisma.attendance.count.mockResolvedValue(0);
       mockPrisma.payment.aggregate.mockResolvedValue({ _sum: { amount: null } });
       mockPrisma.payment.count.mockResolvedValue(0);

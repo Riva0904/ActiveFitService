@@ -93,19 +93,12 @@ export class PaymentsService {
       if (!plan) throw new BadRequestException('Membership plan not found');
       const basePrice = plan.price - (plan.discount ?? 0);
       amount = Math.max(basePrice, 1);
-    } else if (type === 'PT_SESSION' && (clientAmount as any)?.ptSessionId) {
-      // PT session price is set at booking time via pt-sessions/book; amount comes from there
-      if (!clientAmount || clientAmount <= 0) throw new BadRequestException('Invalid PT session amount');
-    } else if (type === 'SUPPLEMENT') {
-      // For supplement orders, amount is the order total computed server-side at order creation
-      if (!clientAmount || clientAmount <= 0) throw new BadRequestException('Invalid supplement amount');
-    } else if (type === 'DIET_PLAN' && (clientAmount as any)?.dietPlanId) {
-      const dietPlan = await this.prisma.dietPlan.findFirst({
-        where: { id: (clientAmount as any).dietPlanId, gymId, deletedAt: null },
-      });
-      if (!dietPlan || !(dietPlan as any).isPremium) throw new BadRequestException('Diet plan not found or not purchasable');
-      amount = Math.max((dietPlan as any).price ?? 0, 1);
-    } else if (type !== 'MEMBERSHIP' && type !== 'OTHER') {
+    } else if (type !== 'MEMBERSHIP') {
+      // PT_SESSION / DIET_PLAN / WORKOUT_PLAN / SUPPLEMENT / OTHER reach this method only via
+      // internal service-to-service calls (pt-sessions/diet-plans/workout-plans services), which
+      // already resolved the authoritative price server-side before calling here — clientAmount
+      // is trusted in that path. This method is unreachable for those types via the public
+      // controller (see PaymentsController.createOrder), so no client can forge it.
       if (!clientAmount || clientAmount <= 0) throw new BadRequestException('Amount must be greater than zero');
     }
 
@@ -212,77 +205,6 @@ export class PaymentsService {
     return verified;
   }
 
-  private async postPaymentActions(payment: any) {
-    try {
-      const actions: Promise<any>[] = [];
-
-      if (payment.type === 'MEMBERSHIP') {
-        const previousPayments = await this.prisma.payment.count({
-          where: { memberId: payment.memberId, type: 'MEMBERSHIP', status: 'COMPLETED', id: { not: payment.id } },
-        });
-        if (previousPayments === 0) {
-          actions.push(this.referralsService.awardReferralCredit(payment.memberId, payment.gymId));
-        }
-        if (payment.promoCodeId) {
-          actions.push(this.promoCodesService.incrementUsage(payment.promoCodeId));
-        }
-      }
-
-      if (payment.type === 'DIET_PLAN' && (payment as any).dietPlanId) {
-        const plan: any = await (this.prisma.dietPlan as any).findUnique({ where: { id: (payment as any).dietPlanId } });
-        if (plan) {
-          actions.push(
-            this.prisma.dietAssignment.create({
-              data: {
-                dietPlanId: (payment as any).dietPlanId,
-                memberId: payment.memberId,
-                gymId: payment.gymId,
-                startDate: new Date(),
-                endDate: plan.durationDays ? new Date(Date.now() + plan.durationDays * 86400000) : undefined,
-                isActive: true,
-              },
-            }),
-          );
-        }
-      }
-
-      if (payment.type === 'WORKOUT_PLAN' && (payment as any).workoutPlanId) {
-        const plan: any = await (this.prisma.workoutPlan as any).findUnique({ where: { id: (payment as any).workoutPlanId } });
-        if (plan) {
-          actions.push(
-            this.prisma.workoutAssignment.create({
-              data: {
-                workoutPlanId: (payment as any).workoutPlanId,
-                memberId: payment.memberId,
-                gymId: payment.gymId,
-                startDate: new Date(),
-                endDate: plan.durationDays ? new Date(Date.now() + plan.durationDays * 86400000) : undefined,
-                isActive: true,
-              },
-            }),
-          );
-        }
-      }
-
-      // Platform commission — apply for all payment types
-      const gymSub = await this.prisma.gymSubscription.findFirst({
-        where: { gymId: payment.gymId, status: 'ACTIVE' },
-        include: { plan: { select: { commissionPct: true } } },
-      });
-      const commissionPct = (gymSub?.plan as any)?.commissionPct ?? 0;
-      if (commissionPct > 0) {
-        const commission = Math.round((payment.amount * commissionPct / 100) * 100) / 100;
-        actions.push(
-          (this.prisma.payment as any).update({ where: { id: payment.id }, data: { platformCommission: commission } }),
-        );
-      }
-
-      await Promise.all(actions);
-    } catch (err) {
-      this.logger.error(`Post-payment actions failed for payment ${payment.id}: ${err.message}`);
-    }
-  }
-
   async handleRazorpayWebhook(rawBody: Buffer, signature: string): Promise<void> {
     const webhookSecret = this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET');
     if (!webhookSecret) {
@@ -306,14 +228,17 @@ export class PaymentsService {
     if (!razorpayOrderId) return;
 
     const payment = await this.prisma.payment.findFirst({
-      where: { razorpayOrderId, status: 'PENDING' },
+      where: { razorpayOrderId, status: { in: ['PENDING', 'FAILED'] } },
     });
-    if (!payment) return; // Already processed or not found
+    if (!payment) return; // Already COMPLETED or no matching order — nothing to do
 
-    await this.prisma.payment.update({
-      where: { id: payment.id },
+    // Webhook is the source of truth: Razorpay confirms capture even if our earlier
+    // client-side verifyPayment call marked it FAILED (e.g. bad/missing signature payload).
+    const result = await this.prisma.payment.updateMany({
+      where: { id: payment.id, status: { in: ['PENDING', 'FAILED'] } },
       data: { status: 'COMPLETED', razorpayPaymentId, paidAt: new Date() },
     });
+    if (result.count === 0) return; // Raced with another handler — already completed
 
     await this.auditService.log({
       gymId: payment.gymId,

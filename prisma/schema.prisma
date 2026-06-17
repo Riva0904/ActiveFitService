@@ -205,6 +205,7 @@ model Gym {
   state              String
   pincode            String
   country            String     @default("India")
+  timezone           String     @default("Asia/Kolkata")
   logo               String?
   coverImage         String?
   description        String?
@@ -315,6 +316,7 @@ model User {
   state               String?
   pincode             String?
   country             String?   @default("India")
+  timezone            String?
   emergencyContact    String?
   isActive            Boolean   @default(true)
   isEmailVerified     Boolean   @default(false)
@@ -852,6 +854,7 @@ model AuditLog {
   @@index([gymId])
   @@index([userId])
   @@index([entity])
+  @@index([gymId, entity, action, entityId])
   @@map("audit_logs")
 }
 

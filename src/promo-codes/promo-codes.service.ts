@@ -88,10 +88,24 @@ export class PromoCodesService {
     };
   }
 
-  async incrementUsage(promoCodeId: string) {
-    return this.prisma.promoCode.update({
-      where: { id: promoCodeId },
+  /**
+   * Atomically increments usedCount only if still under maxUses. The WHERE clause is
+   * re-evaluated by Postgres at update time, so this is race-safe even when two payments
+   * for the same code complete concurrently — only one can win the last available use.
+   * Returns false if the limit was already hit (caller should audit-log, not throw —
+   * the payment itself already completed by this point).
+   */
+  async incrementUsage(promoCodeId: string): Promise<boolean> {
+    const promo = await this.prisma.promoCode.findUnique({ where: { id: promoCodeId } });
+    if (!promo) return false;
+
+    const where: any = { id: promoCodeId };
+    if (promo.maxUses !== null) where.usedCount = { lt: promo.maxUses };
+
+    const result = await this.prisma.promoCode.updateMany({
+      where,
       data: { usedCount: { increment: 1 } },
     });
+    return result.count > 0;
   }
 }

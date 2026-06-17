@@ -41,10 +41,21 @@ const DEFAULT_PLANS = [
 export class SaasPlansService {
   constructor(private prisma: PrismaService) {}
 
-  findAll() {
-    return this.prisma.saaSSubscriptionPlan.findMany({
+  // Plans change rarely (admin-edited tiers) but are read on every pricing/limit check.
+  // Simple in-memory TTL cache — single-instance only; if this ever runs multi-instance,
+  // replace with a shared cache (Redis) so instances don't serve stale data after an update.
+  private cachedPlans: { data: any[]; expiresAt: number } | null = null;
+  private readonly CACHE_TTL_MS = 5 * 60 * 1000;
+
+  async findAll() {
+    if (this.cachedPlans && this.cachedPlans.expiresAt > Date.now()) {
+      return this.cachedPlans.data;
+    }
+    const data = await this.prisma.saaSSubscriptionPlan.findMany({
       orderBy: { monthlyPrice: 'asc' },
     });
+    this.cachedPlans = { data, expiresAt: Date.now() + this.CACHE_TTL_MS };
+    return data;
   }
 
   async initDefaults() {
@@ -57,6 +68,7 @@ export class SaasPlansService {
         }),
       ),
     );
+    this.cachedPlans = null;
     return this.prisma.saaSSubscriptionPlan.findMany({ orderBy: { monthlyPrice: 'asc' } });
   }
 
@@ -69,7 +81,9 @@ export class SaasPlansService {
   async update(id: string, data: any) {
     await this.findOne(id);
     const { name, plan, createdAt, updatedAt, gymSubscriptions, id: _id, ...updateData } = data;
-    return this.prisma.saaSSubscriptionPlan.update({ where: { id }, data: updateData });
+    const updated = await this.prisma.saaSSubscriptionPlan.update({ where: { id }, data: updateData });
+    this.cachedPlans = null;
+    return updated;
   }
 
   async getPlatformRevenue() {

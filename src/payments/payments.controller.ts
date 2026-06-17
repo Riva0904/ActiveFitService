@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Post, Body, Query, UseGuards, Headers, Req, HttpCode, HttpStatus } from '@nestjs/common';
+﻿import { Controller, Get, Post, Body, Query, UseGuards, Headers, Req, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Request } from 'express';
@@ -60,12 +60,19 @@ export class PaymentsController {
     return this.paymentsService.getMonthlyRevenueBreakdown(user.gymId);
   }
 
+  // Public endpoint — only MEMBERSHIP is safe here (server re-prices via membershipPlanId).
+  // DIET_PLAN / PT_SESSION / WORKOUT_PLAN go through their own modules' buy/book endpoints,
+  // which compute price server-side and call paymentsService.createRazorpayOrder() directly —
+  // never expose those types here, or a caller can pass an arbitrary `amount` for them.
   @Post('create-order')
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   createOrder(
     @Body() body: { amount: number; type: string; promoCode?: string; referralCreditToApply?: number; membershipPlanId?: string },
     @CurrentUser() user: any,
   ) {
+    if (body.type !== 'MEMBERSHIP') {
+      throw new BadRequestException('Use the dedicated purchase endpoint for this payment type');
+    }
     return this.paymentsService.createRazorpayOrder(
       body.amount, user.id, user.gymId, body.type, body.promoCode, body.referralCreditToApply, body.membershipPlanId,
     );

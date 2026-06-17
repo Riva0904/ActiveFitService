@@ -261,8 +261,9 @@ export class EmailService {
     `);
   }
 
-  private getPaymentConfirmTemplate(name: string, amount: number, invoiceNo: string): string {
-    const formatted = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount);
+  private getPaymentConfirmTemplate(name: string, amount: number, invoiceNo: string, locale = 'en-IN'): string {
+    // Currency stays INR (India-only) — only the digit-grouping/symbol-placement locale is parameterized.
+    const formatted = new Intl.NumberFormat(locale, { style: 'currency', currency: 'INR' }).format(amount);
     return this.getEmailWrapper(`
       <h1>Payment Confirmed ✅</h1>
       <p>Hi <span class="highlight">${name}</span>,</p>
