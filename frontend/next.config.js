@@ -1,12 +1,17 @@
 /** @type {import('next').NextConfig} */
 
-// Derive the prod backend origin (http+ws) from NEXT_PUBLIC_API_URL so the CSP doesn't
-// stay hardcoded to localhost once deployed. Keeps localhost too, so local dev still works.
+// Frontend (Vercel) and backend (Render) live on different domains in this deployment.
+// REST calls go through the rewrite below so the browser only ever talks to its own
+// origin — making the httpOnly auth cookie same-site (cross-domain cookies don't get
+// stored under Vercel's origin at all, breaking middleware + sameSite=lax XHR sends).
+// Socket.io can't be proxied this way (Vercel rewrites can't hold a WS connection open),
+// so it still connects directly to NEXT_PUBLIC_BACKEND_ORIGIN — see frontend/src/lib/socket.ts.
+const BACKEND_ORIGIN = process.env.NEXT_PUBLIC_BACKEND_ORIGIN;
+
 function backendConnectSrc() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) return '';
+  if (!BACKEND_ORIGIN) return '';
   try {
-    const origin = new URL(apiUrl).origin; // strips the /api/v1 path
+    const origin = new URL(BACKEND_ORIGIN).origin;
     const wsOrigin = origin.replace(/^http/, 'ws');
     return ` ${origin} ${wsOrigin}`;
   } catch {
@@ -80,6 +85,12 @@ const nextConfig = {
         source: '/(.*)',
         headers: securityHeaders,
       },
+    ];
+  },
+  async rewrites() {
+    if (!BACKEND_ORIGIN) return [];
+    return [
+      { source: '/api/v1/:path*', destination: `${BACKEND_ORIGIN}/api/v1/:path*` },
     ];
   },
 };
