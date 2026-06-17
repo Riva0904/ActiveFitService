@@ -3,12 +3,11 @@ import {
   ParseIntPipe, DefaultValuePipe, UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname, join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { memoryStorage } from 'multer';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { ChatService } from './chat.service';
+import { CloudinaryService } from '../common/services/cloudinary.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -19,21 +18,16 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 @UseGuards(JwtAuthGuard)
 @Controller('chat')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) {}
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: (_req, _file, cb) => {
-        const dir = join(process.cwd(), 'uploads', 'chat');
-        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-        cb(null, dir);
-      },
-      filename: (_req, file, cb) => {
-        const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        cb(null, unique + extname(file.originalname));
-      },
-    }),
+    // Free-tier hosts wipe local disk on every redeploy — buffer in memory and
+    // push straight to Cloudinary instead of writing to /uploads.
+    storage: memoryStorage(),
     limits: { fileSize: 25 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
       if (/\.(jpe?g|png|gif|webp|pdf|docx?|xlsx?|txt|csv|zip|mp4|mp3)$/i.test(file.originalname)) {
@@ -43,10 +37,11 @@ export class ChatController {
       }
     },
   }))
-  uploadFile(@UploadedFile() file: any) {
+  async uploadFile(@UploadedFile() file: any) {
     if (!file) throw new BadRequestException('No file uploaded');
+    const result = await this.cloudinaryService.uploadBuffer(file.buffer, 'chat');
     return {
-      url: `/uploads/chat/${file.filename}`,
+      url: result.secure_url,
       name: file.originalname,
       type: file.mimetype,
     };
