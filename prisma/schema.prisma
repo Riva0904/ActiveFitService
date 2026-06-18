@@ -64,6 +64,11 @@ enum CheckInMethod {
   BIOMETRIC
 }
 
+enum AttendanceCloseReason {
+  NORMAL
+  AUTO_CHECKOUT
+}
+
 enum PaymentStatus {
   PENDING
   COMPLETED
@@ -233,6 +238,7 @@ model Gym {
   membershipPlans    MembershipPlan[]
   memberSubscriptions MemberSubscription[]
   attendance         Attendance[]
+  occupancySnapshots OccupancySnapshot[]
   payments           Payment[]
   workoutPlans       WorkoutPlan[]
   dietPlans          DietPlan[]
@@ -361,6 +367,9 @@ model Member {
   referralCredit      Float    @default(0)
   referredById        String?
   joinDate            DateTime @default(now())
+  attendanceStreak     Int      @default(0)
+  bestAttendanceStreak Int      @default(0)
+  lastAttendanceDate   DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   deletedAt           DateTime?
@@ -515,6 +524,7 @@ model Attendance {
   date         DateTime         @default(now()) @db.Date
   status       AttendanceStatus @default(PRESENT)
   method       CheckInMethod    @default(MANUAL)
+  closeReason  AttendanceCloseReason @default(NORMAL)
   notes        String?
   markedBy     String?
   deletedAt    DateTime?
@@ -532,6 +542,19 @@ model Attendance {
   @@index([gymId, checkInTime])
   @@index([gymId, memberId])
   @@map("attendance")
+}
+
+model OccupancySnapshot {
+  id             String   @id @default(uuid())
+  gymId          String
+  occupancyCount Int
+  createdAt      DateTime @default(now())
+
+  gym            Gym      @relation(fields: [gymId], references: [id])
+
+  @@index([gymId])
+  @@index([gymId, createdAt])
+  @@map("occupancy_snapshots")
 }
 
 model Payment {

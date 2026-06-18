@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Res, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { Response } from 'express';
 import { Role } from '@prisma/client';
 import { AttendanceService } from './attendance.service';
+import { AttendanceExportService } from './attendance-export.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -12,7 +14,10 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 @UseGuards(JwtAuthGuard)
 @Controller('attendance')
 export class AttendanceController {
-  constructor(private readonly attendanceService: AttendanceService) {}
+  constructor(
+    private readonly attendanceService: AttendanceService,
+    private readonly exportService: AttendanceExportService,
+  ) {}
 
   // ─── Admin-only endpoints ─────────────────────────────────────────────────
 
@@ -151,8 +156,97 @@ export class AttendanceController {
   @Get('analytics')
   @UseGuards(RolesGuard)
   @Roles(Role.GYM_ADMIN, Role.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Attendance analytics: avg duration, daily/monthly trend, peak hours, most active members' })
+  @ApiOperation({ summary: 'Attendance analytics: avg duration, daily/monthly trend, peak hours, peak day, most active members' })
   getAnalytics(@CurrentUser() user: any) {
     return this.attendanceService.getAnalytics(user.gymId);
+  }
+
+  // ─── Attendance Intelligence V2 ─────────────────────────────────────────────
+
+  @Get('streak')
+  @UseGuards(RolesGuard)
+  @Roles(Role.MEMBER)
+  @ApiOperation({ summary: 'Member: current + best consecutive-day attendance streak' })
+  getStreak(@CurrentUser() user: any) {
+    return this.attendanceService.getStreak(user.id, user.gymId);
+  }
+
+  @Get('inactive-members')
+  @UseGuards(RolesGuard)
+  @Roles(Role.GYM_ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Members absent 5+/7+/14+/30+ days, with severity (LOW/MEDIUM/HIGH/CRITICAL)' })
+  getInactiveMembers(@CurrentUser() user: any) {
+    return this.attendanceService.getInactiveMembers(user.gymId);
+  }
+
+  @Get('calendar')
+  @UseGuards(RolesGuard)
+  @Roles(Role.MEMBER)
+  @ApiOperation({ summary: 'Member: GitHub-style present-dates calendar for a given month + attendance rate' })
+  getCalendar(@Query('month') month: string, @Query('year') year: string, @CurrentUser() user: any) {
+    const m = +month, y = +year;
+    if (!m || !y || m < 1 || m > 12) throw new BadRequestException('Valid month (1-12) and year are required');
+    return this.attendanceService.getCalendar(user.id, user.gymId, m, y);
+  }
+
+  @Get('occupancy-trend')
+  @UseGuards(RolesGuard)
+  @Roles(Role.GYM_ADMIN, Role.SUPER_ADMIN, Role.STAFF)
+  @ApiOperation({ summary: "Today's occupancy snapshots (captured every 30 minutes) for a trend chart" })
+  getOccupancyTrend(@CurrentUser() user: any) {
+    return this.attendanceService.getOccupancyTrend(user.gymId);
+  }
+
+  @Get('leaderboard')
+  @UseGuards(RolesGuard)
+  @Roles(Role.GYM_ADMIN, Role.SUPER_ADMIN, Role.STAFF, Role.MEMBER)
+  @ApiOperation({ summary: 'Top 10 members by visit count this calendar month' })
+  getLeaderboard(@CurrentUser() user: any) {
+    return this.attendanceService.getLeaderboard(user.gymId);
+  }
+
+  @Get('my-insights')
+  @UseGuards(RolesGuard)
+  @Roles(Role.MEMBER)
+  @ApiOperation({ summary: 'Member: personal fitness activity insights' })
+  getMyInsights(@CurrentUser() user: any) {
+    return this.attendanceService.getMyInsights(user.id, user.gymId);
+  }
+
+  // ─── Exports (Admin only) ──────────────────────────────────────────────────
+
+  @Get('export/csv')
+  @UseGuards(RolesGuard)
+  @Roles(Role.GYM_ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Export attendance records as CSV (filters: startDate, endDate, memberId, trainerId, planId)' })
+  async exportCsv(@Query() query: any, @CurrentUser() user: any, @Res() res: Response) {
+    const records = await this.attendanceService.getExportRecords(user.gymId, query);
+    const csv = this.exportService.toCsv(records);
+    res.set({ 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="attendance.csv"' });
+    res.send(csv);
+  }
+
+  @Get('export/excel')
+  @UseGuards(RolesGuard)
+  @Roles(Role.GYM_ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Export attendance records as Excel (.xlsx)' })
+  async exportExcel(@Query() query: any, @CurrentUser() user: any, @Res() res: Response) {
+    const records = await this.attendanceService.getExportRecords(user.gymId, query);
+    const buffer = await this.exportService.toExcel(records);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="attendance.xlsx"',
+    });
+    res.send(buffer);
+  }
+
+  @Get('export/pdf')
+  @UseGuards(RolesGuard)
+  @Roles(Role.GYM_ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Export attendance records as PDF' })
+  async exportPdf(@Query() query: any, @CurrentUser() user: any, @Res() res: Response) {
+    const records = await this.attendanceService.getExportRecords(user.gymId, query);
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="attendance.pdf"' });
+    this.exportService.toPdf(records, res);
   }
 }

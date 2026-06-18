@@ -1,9 +1,20 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
-import { CheckInMethod, Role } from '@prisma/client';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { CheckInMethod, Role, AttendanceCloseReason } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+const WEEKDAY_NAMES = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+const ABSENCE_THRESHOLDS: { days: number; severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' }[] = [
+  { days: 30, severity: 'CRITICAL' },
+  { days: 14, severity: 'HIGH' },
+  { days: 7, severity: 'MEDIUM' },
+  { days: 5, severity: 'LOW' },
+];
 
 @Injectable()
 export class AttendanceService {
+  private readonly logger = new Logger(AttendanceService.name);
+
   constructor(private prisma: PrismaService) {}
 
   // ─── Admin: manual check-in for a member ───────────────────────────────────
@@ -445,6 +456,35 @@ export class AttendanceService {
 
   // ─── Smart QR flow: explicit member check-in/check-out (not a toggle) ────
 
+  // Consecutive-day streak: bump on a new calendar day following yesterday's
+  // attendance, reset to 1 on any gap > 1 day, leave untouched for a same-day
+  // re-check-in (e.g. after an earlier checkout). Runs on every member
+  // check-in path (smart QR + staff manual-check-in-by-code for a member).
+  private async updateStreak(tx: any, memberId: string) {
+    const member = await tx.member.findUnique({
+      where: { id: memberId },
+      select: { attendanceStreak: true, bestAttendanceStreak: true, lastAttendanceDate: true },
+    });
+    if (!member) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const last = member.lastAttendanceDate ? new Date(member.lastAttendanceDate) : null;
+    if (last) last.setHours(0, 0, 0, 0);
+
+    if (last && last.getTime() === today.getTime()) return; // already counted today
+
+    const diffDays = last ? Math.round((today.getTime() - last.getTime()) / 86400000) : null;
+    const newStreak = diffDays === 1 ? member.attendanceStreak + 1 : 1;
+    const bestStreak = Math.max(member.bestAttendanceStreak, newStreak);
+
+    await tx.member.update({
+      where: { id: memberId },
+      data: { attendanceStreak: newStreak, bestAttendanceStreak: bestStreak, lastAttendanceDate: today },
+    });
+  }
+
   async memberCheckIn(userId: string, gymId: string) {
     return this.prisma.$transaction(async (tx) => {
       const member = await tx.member.findFirst({ where: { userId, gymId } });
@@ -464,6 +504,7 @@ export class AttendanceService {
       const attendance = await tx.attendance.create({
         data: { userId, memberId: member.id, gymId, method: CheckInMethod.QR_CODE },
       });
+      await this.updateStreak(tx, member.id);
       return { message: 'Attendance checked in successfully.', attendance };
     });
   }
@@ -589,6 +630,7 @@ export class AttendanceService {
     const attendance = await this.prisma.attendance.create({
       data: { userId: person.userId, memberId: person.memberId, gymId, method: CheckInMethod.MANUAL, markedBy },
     });
+    if (person.memberId) await this.updateStreak(this.prisma, person.memberId);
     return { message: 'Attendance checked in successfully.', userName: `${person.user.firstName} ${person.user.lastName}`, attendance };
   }
 
@@ -669,6 +711,13 @@ export class AttendanceService {
     for (const r of allCheckIns) hourCounts[r.checkInTime.getHours()]++;
     const peakHours = hourCounts.map((count, hour) => ({ hour, count })).sort((a, b) => b.count - a.count).slice(0, 5);
 
+    // Peak day — bucket all check-ins by weekday
+    const weekdayCounts = new Array(7).fill(0);
+    for (const r of allCheckIns) weekdayCounts[r.checkInTime.getDay()]++;
+    const peakDayIndex = weekdayCounts.reduce((best, count, i) => (count > weekdayCounts[best] ? i : best), 0);
+    const peakDay = WEEKDAY_NAMES[peakDayIndex];
+    const peakDayVisits = weekdayCounts[peakDayIndex];
+
     // Most active members — top 5 by visit count
     const grouped = await this.prisma.attendance.groupBy({
       by: ['memberId'],
@@ -692,6 +741,238 @@ export class AttendanceService {
       };
     });
 
-    return { avgVisitDuration, dailyTrend, monthlyTrend, peakHours, mostActiveMembers };
+    return { avgVisitDuration, dailyTrend, monthlyTrend, peakHours, mostActiveMembers, peakDay, peakDayVisits };
+  }
+
+  // ─── Feature 1: attendance streak ──────────────────────────────────────────
+
+  async getStreak(userId: string, gymId: string) {
+    const member = await this.prisma.member.findFirst({
+      where: { userId, gymId },
+      select: { attendanceStreak: true, bestAttendanceStreak: true },
+    });
+    if (!member) throw new BadRequestException('Member profile not found');
+    return { currentStreak: member.attendanceStreak, bestStreak: member.bestAttendanceStreak };
+  }
+
+  // ─── Feature 2 & 9: inactive members / absence severity ──────────────────
+
+  async getInactiveMembers(gymId: string) {
+    const members = await this.prisma.member.findMany({
+      where: { gymId, deletedAt: null },
+      select: {
+        id: true, lastAttendanceDate: true, joinDate: true,
+        user: { select: { firstName: true, lastName: true } },
+      },
+    });
+
+    const now = new Date();
+    const result = members
+      .map((m) => {
+        const since = m.lastAttendanceDate ?? m.joinDate;
+        const daysAbsent = Math.floor((now.getTime() - since.getTime()) / 86400000);
+        const severity = ABSENCE_THRESHOLDS.find((t) => daysAbsent >= t.days)?.severity;
+        return severity
+          ? { memberId: m.id, name: `${m.user.firstName} ${m.user.lastName}`, daysAbsent, severity }
+          : null;
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
+      .sort((a, b) => b.daysAbsent - a.daysAbsent);
+
+    return result;
+  }
+
+  // ─── Feature 3: attendance calendar ────────────────────────────────────────
+
+  async getCalendar(userId: string, gymId: string, month: number, year: number) {
+    const member = await this.prisma.member.findFirst({ where: { userId, gymId } });
+    if (!member) throw new BadRequestException('Member profile not found');
+
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 1);
+
+    const records = await this.prisma.attendance.findMany({
+      where: { gymId, memberId: member.id, checkInTime: { gte: start, lt: end } },
+      select: { checkInTime: true },
+    });
+
+    const presentDates = Array.from(
+      new Set(records.map((r) => r.checkInTime.toISOString().split('T')[0])),
+    ).sort();
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysElapsed = (year === today.getFullYear() && month === today.getMonth() + 1)
+      ? today.getDate()
+      : (end <= today ? daysInMonth : 0);
+
+    const attendanceRate = daysElapsed > 0 ? Math.round((presentDates.length / daysElapsed) * 100) : 0;
+
+    return { presentDates, attendanceRate };
+  }
+
+  // ─── Feature 5: auto-checkout cron ─────────────────────────────────────────
+
+  @Cron('59 23 * * *', { name: 'attendanceAutoCheckout' })
+  async autoCheckoutStaleSessions() {
+    const eightHoursAgo = new Date(Date.now() - 8 * 60 * 60 * 1000);
+
+    const stale = await this.prisma.attendance.findMany({
+      where: { checkOutTime: null, checkInTime: { lt: eightHoursAgo } },
+    });
+
+    for (const record of stale) {
+      const checkOutTime = new Date();
+      const durationMinutes = Math.round((checkOutTime.getTime() - record.checkInTime.getTime()) / 60000);
+      await this.prisma.attendance.update({
+        where: { id: record.id },
+        data: { checkOutTime, durationMinutes, closeReason: AttendanceCloseReason.AUTO_CHECKOUT },
+      });
+    }
+
+    if (stale.length) this.logger.log(`Auto-checked-out ${stale.length} stale attendance session(s)`);
+    return { autoCheckedOut: stale.length };
+  }
+
+  // ─── Feature 6: occupancy trend ────────────────────────────────────────────
+
+  @Cron(CronExpression.EVERY_30_MINUTES, { name: 'occupancySnapshot' })
+  async captureOccupancySnapshots() {
+    const gyms = await this.prisma.gym.findMany({ where: { status: 'ACTIVE' }, select: { id: true } });
+    for (const gym of gyms) {
+      const occupancyCount = await this.prisma.attendance.count({ where: { gymId: gym.id, checkOutTime: null } });
+      await this.prisma.occupancySnapshot.create({ data: { gymId: gym.id, occupancyCount } });
+    }
+  }
+
+  async getOccupancyTrend(gymId: string) {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    const snapshots = await this.prisma.occupancySnapshot.findMany({
+      where: { gymId, createdAt: { gte: start } },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return snapshots.map((s) => ({
+      time: s.createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      count: s.occupancyCount,
+    }));
+  }
+
+  // ─── Feature 7: leaderboard ─────────────────────────────────────────────────
+
+  async getLeaderboard(gymId: string) {
+    const start = new Date();
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+
+    const grouped = await this.prisma.attendance.groupBy({
+      by: ['memberId'],
+      where: { gymId, memberId: { not: null }, checkInTime: { gte: start } },
+      _count: { memberId: true },
+      orderBy: { _count: { memberId: 'desc' } },
+      take: 10,
+    });
+
+    const memberIds = grouped.map((g) => g.memberId).filter((id): id is string => !!id);
+    const members = await this.prisma.member.findMany({
+      where: { id: { in: memberIds } },
+      select: { id: true, user: { select: { firstName: true, lastName: true } } },
+    });
+
+    return grouped.map((g, i) => {
+      const m = members.find((x) => x.id === g.memberId);
+      return {
+        rank: i + 1,
+        memberName: m ? `${m.user.firstName} ${m.user.lastName}` : 'Unknown',
+        visits: g._count.memberId,
+      };
+    });
+  }
+
+  // ─── Feature 10: member insights ───────────────────────────────────────────
+
+  async getMyInsights(userId: string, gymId: string) {
+    const member = await this.prisma.member.findFirst({
+      where: { userId, gymId },
+      select: { attendanceStreak: true, bestAttendanceStreak: true },
+    });
+    if (!member) throw new BadRequestException('Member profile not found');
+
+    const records = await this.prisma.attendance.findMany({
+      where: { gymId, userId },
+      select: { checkInTime: true, checkOutTime: true, durationMinutes: true },
+    });
+
+    const totalVisits = records.length;
+    const durations = records
+      .filter((r) => r.checkOutTime)
+      .map((r) => r.durationMinutes ?? Math.round((r.checkOutTime!.getTime() - r.checkInTime.getTime()) / 60000));
+    const avgDuration = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+
+    const weekdayCounts = new Array(7).fill(0);
+    const hourCounts = new Array(24).fill(0);
+    for (const r of records) {
+      weekdayCounts[r.checkInTime.getDay()]++;
+      hourCounts[r.checkInTime.getHours()]++;
+    }
+    const favoriteDayIndex = weekdayCounts.reduce((best, count, i) => (count > weekdayCounts[best] ? i : best), 0);
+    const favoriteHourIndex = hourCounts.reduce((best, count, i) => (count > hourCounts[best] ? i : best), 0);
+
+    return {
+      totalVisits,
+      avgDuration,
+      currentStreak: member.attendanceStreak,
+      bestStreak: member.bestAttendanceStreak,
+      favoriteDay: totalVisits ? WEEKDAY_NAMES[favoriteDayIndex] : null,
+      favoriteHour: totalVisits ? `${String(favoriteHourIndex).padStart(2, '0')}:00` : null,
+    };
+  }
+
+  // ─── Feature 8: exports ─────────────────────────────────────────────────────
+
+  async getExportRecords(gymId: string, filters: any) {
+    const where: any = { gymId };
+    if (filters.startDate || filters.endDate) {
+      where.checkInTime = {};
+      if (filters.startDate) where.checkInTime.gte = new Date(filters.startDate);
+      if (filters.endDate) where.checkInTime.lte = new Date(filters.endDate);
+    }
+    if (filters.memberId) where.memberId = filters.memberId;
+    if (filters.trainerId) where.userId = filters.trainerId;
+
+    const records = await this.prisma.attendance.findMany({
+      where,
+      orderBy: { checkInTime: 'desc' },
+      include: {
+        member: {
+          select: {
+            memberCode: true,
+            user: { select: { firstName: true, lastName: true } },
+            memberSubscriptions: {
+              where: filters.planId ? { planId: filters.planId } : undefined,
+              take: 1,
+              select: { plan: { select: { name: true } } },
+            },
+          },
+        },
+        user: { select: { firstName: true, lastName: true, role: true } },
+      },
+    });
+
+    // planId filter applied post-query since it's on the related subscription, not the attendance row
+    const filtered = filters.planId
+      ? records.filter((r) => (r.member?.memberSubscriptions?.length ?? 0) > 0)
+      : records;
+
+    return filtered.map((r) => ({
+      name: r.member ? `${r.member.user.firstName} ${r.member.user.lastName}` : `${r.user?.firstName} ${r.user?.lastName}`,
+      checkIn: r.checkInTime,
+      checkOut: r.checkOutTime,
+      duration: r.durationMinutes ?? (r.checkOutTime ? Math.round((r.checkOutTime.getTime() - r.checkInTime.getTime()) / 60000) : null),
+      status: r.checkOutTime ? 'Completed' : 'Active',
+    }));
   }
 }
