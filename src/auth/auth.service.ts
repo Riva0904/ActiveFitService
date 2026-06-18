@@ -5,7 +5,6 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -298,7 +297,12 @@ export class AuthService {
       expiresIn: this.configService.get('JWT_EXPIRES_IN', '15m'),
     });
 
-    const rawRefresh = randomBytes(40).toString('hex');
+    // Must be a signed JWT (not opaque random bytes) so refreshTokens() can recover
+    // payload.sub to look up the user before the bcrypt comparison below.
+    const rawRefresh = this.jwtService.sign(payload, {
+      secret: this.configService.get('JWT_REFRESH_SECRET', this.configService.get('JWT_SECRET')),
+      expiresIn: this.configService.get('JWT_REFRESH_EXPIRES_IN', '7d'),
+    });
     // Hash is awaited before returning — prevents race conditions where the token
     // is used before the hash is persisted to the database.
     const hashed = await bcrypt.hash(rawRefresh, 10);
