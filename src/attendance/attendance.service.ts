@@ -442,4 +442,256 @@ export class AttendanceService {
     }
     return days;
   }
+
+  // ─── Smart QR flow: explicit member check-in/check-out (not a toggle) ────
+
+  async memberCheckIn(userId: string, gymId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const member = await tx.member.findFirst({ where: { userId, gymId } });
+      if (!member) throw new BadRequestException('Member profile not found');
+
+      const activeMembership = await tx.memberSubscription.findFirst({
+        where: { memberId: member.id, gymId, status: 'ACTIVE' },
+      });
+      if (!activeMembership)
+        throw new BadRequestException('Membership inactive. Please renew your membership.');
+
+      const open = await tx.attendance.findFirst({
+        where: { gymId, checkOutTime: null, OR: [{ memberId: member.id }, { userId }] },
+      });
+      if (open) throw new BadRequestException('Already checked in. Check out before checking in again.');
+
+      const attendance = await tx.attendance.create({
+        data: { userId, memberId: member.id, gymId, method: CheckInMethod.QR_CODE },
+      });
+      return { message: 'Attendance checked in successfully.', attendance };
+    });
+  }
+
+  async memberCheckOut(userId: string, gymId: string) {
+    const member = await this.prisma.member.findFirst({ where: { userId, gymId } });
+
+    const open = await this.prisma.attendance.findFirst({
+      where: {
+        gymId,
+        checkOutTime: null,
+        OR: [{ userId }, ...(member ? [{ memberId: member.id }] : [])],
+      },
+    });
+    if (!open) throw new BadRequestException('No active check-in found.');
+
+    const checkOutTime = new Date();
+    const durationMinutes = Math.round((checkOutTime.getTime() - open.checkInTime.getTime()) / 60000);
+
+    const attendance = await this.prisma.attendance.update({
+      where: { id: open.id },
+      data: { checkOutTime, durationMinutes },
+    });
+    return { message: 'Attendance checked out successfully.', attendance };
+  }
+
+  async getStatus(userId: string, gymId: string) {
+    const member = await this.prisma.member.findFirst({ where: { userId, gymId } });
+
+    let membershipActive = false;
+    if (member) {
+      const activeMembership = await this.prisma.memberSubscription.findFirst({
+        where: { memberId: member.id, gymId, status: 'ACTIVE' },
+      });
+      membershipActive = !!activeMembership;
+    }
+
+    const open = await this.prisma.attendance.findFirst({
+      where: {
+        gymId,
+        checkOutTime: null,
+        OR: [{ userId }, ...(member ? [{ memberId: member.id }] : [])],
+      },
+    });
+
+    if (!open) return { checkedIn: false, membershipActive };
+    return {
+      checkedIn: true,
+      membershipActive,
+      attendanceId: open.id,
+      checkInTime: open.checkInTime,
+      durationRunning: true,
+    };
+  }
+
+  async getHistory(userId: string, gymId: string, query: any = {}) {
+    const { limit = 30, skip = 0 } = query;
+    const member = await this.prisma.member.findFirst({ where: { userId, gymId } });
+
+    const where: any = {
+      gymId,
+      OR: [{ userId }, ...(member ? [{ memberId: member.id }] : [])],
+    };
+
+    const [records, total] = await Promise.all([
+      this.prisma.attendance.findMany({
+        where,
+        take: +limit,
+        skip: +skip,
+        orderBy: { checkInTime: 'desc' },
+      }),
+      this.prisma.attendance.count({ where }),
+    ]);
+
+    const data = records.map((r) => ({
+      date: r.checkInTime,
+      checkIn: r.checkInTime,
+      checkOut: r.checkOutTime,
+      durationMinutes: r.durationMinutes ??
+        (r.checkOutTime ? Math.round((r.checkOutTime.getTime() - r.checkInTime.getTime()) / 60000) : null),
+    }));
+
+    return { data, total };
+  }
+
+  // ─── Staff/Admin: explicit manual check-in / check-out (not a toggle) ────
+
+  private async findPersonByCode(code: string, gymId: string) {
+    const member = await this.prisma.member.findFirst({
+      where: { gymId, OR: [{ memberCode: code }, { qrToken: code }] },
+      include: { user: true },
+    });
+    if (member) return { userId: member.userId, memberId: member.id, user: member.user };
+
+    const trainer = await this.prisma.trainer.findFirst({ where: { gymId, employeeId: code }, include: { user: true } });
+    if (trainer) return { userId: trainer.userId, memberId: null, user: trainer.user };
+
+    const staff = await this.prisma.staff.findFirst({ where: { gymId, employeeId: code }, include: { user: true } });
+    if (staff) return { userId: staff.userId, memberId: null, user: staff.user };
+
+    throw new NotFoundException('No member, trainer, or staff found with this ID in your gym.');
+  }
+
+  async manualCheckIn(code: string, gymId: string, markedBy: string) {
+    const person = await this.findPersonByCode(code, gymId);
+    if (!person.user.isActive) throw new BadRequestException('Account is deactivated. Contact gym admin.');
+
+    if (person.memberId) {
+      const activeMembership = await this.prisma.memberSubscription.findFirst({
+        where: { memberId: person.memberId, gymId, status: 'ACTIVE' },
+      });
+      if (!activeMembership) throw new BadRequestException('Membership inactive. Please renew your membership.');
+    }
+
+    const open = await this.prisma.attendance.findFirst({
+      where: {
+        gymId, checkOutTime: null,
+        OR: [{ userId: person.userId }, ...(person.memberId ? [{ memberId: person.memberId }] : [])],
+      },
+    });
+    if (open) throw new BadRequestException('Already checked in. Check out before checking in again.');
+
+    const attendance = await this.prisma.attendance.create({
+      data: { userId: person.userId, memberId: person.memberId, gymId, method: CheckInMethod.MANUAL, markedBy },
+    });
+    return { message: 'Attendance checked in successfully.', userName: `${person.user.firstName} ${person.user.lastName}`, attendance };
+  }
+
+  async manualCheckOut(code: string, gymId: string) {
+    const person = await this.findPersonByCode(code, gymId);
+
+    const open = await this.prisma.attendance.findFirst({
+      where: {
+        gymId, checkOutTime: null,
+        OR: [{ userId: person.userId }, ...(person.memberId ? [{ memberId: person.memberId }] : [])],
+      },
+    });
+    if (!open) throw new BadRequestException('No active check-in found.');
+
+    const checkOutTime = new Date();
+    const durationMinutes = Math.round((checkOutTime.getTime() - open.checkInTime.getTime()) / 60000);
+
+    const attendance = await this.prisma.attendance.update({
+      where: { id: open.id },
+      data: { checkOutTime, durationMinutes },
+    });
+    return { message: 'Attendance checked out successfully.', userName: `${person.user.firstName} ${person.user.lastName}`, attendance };
+  }
+
+  // ─── Occupancy & analytics ─────────────────────────────────────────────────
+
+  async getOccupancy(gymId: string) {
+    const gym = await this.prisma.gym.findUnique({ where: { id: gymId }, select: { maxMembers: true } });
+    const currentlyIn = await this.prisma.attendance.count({ where: { gymId, checkOutTime: null } });
+
+    const capacity = gym?.maxMembers ?? 100;
+    const occupancyPercent = capacity > 0 ? Math.round((currentlyIn / capacity) * 100) : 0;
+    const level = occupancyPercent <= 30 ? 'LOW' : occupancyPercent <= 70 ? 'MEDIUM' : 'HIGH';
+
+    return { currentlyIn, capacity, occupancyPercent, level };
+  }
+
+  async getAnalytics(gymId: string) {
+    const closedRecords = await this.prisma.attendance.findMany({
+      where: { gymId, checkOutTime: { not: null } },
+      select: { checkInTime: true, checkOutTime: true, durationMinutes: true, memberId: true, userId: true },
+    });
+
+    const durations = closedRecords.map((r) =>
+      r.durationMinutes ?? Math.round((r.checkOutTime!.getTime() - r.checkInTime.getTime()) / 60000),
+    );
+    const avgVisitDuration = durations.length
+      ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+      : 0;
+
+    // Daily trend — last 30 days
+    const dailyTrend: { date: string; count: number }[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      const count = await this.prisma.attendance.count({ where: { gymId, checkInTime: { gte: date, lte: end } } });
+      dailyTrend.push({ date: date.toISOString().split('T')[0], count });
+    }
+
+    // Monthly trend — last 12 months
+    const monthlyTrend: { month: string; count: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const start = new Date();
+      start.setMonth(start.getMonth() - i, 1);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setMonth(end.getMonth() + 1);
+      const count = await this.prisma.attendance.count({ where: { gymId, checkInTime: { gte: start, lt: end } } });
+      monthlyTrend.push({ month: start.toLocaleDateString('en', { month: 'short', year: 'numeric' }), count });
+    }
+
+    // Peak hours — bucket all check-ins by hour of day
+    const allCheckIns = await this.prisma.attendance.findMany({ where: { gymId }, select: { checkInTime: true } });
+    const hourCounts = new Array(24).fill(0);
+    for (const r of allCheckIns) hourCounts[r.checkInTime.getHours()]++;
+    const peakHours = hourCounts.map((count, hour) => ({ hour, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+
+    // Most active members — top 5 by visit count
+    const grouped = await this.prisma.attendance.groupBy({
+      by: ['memberId'],
+      where: { gymId, memberId: { not: null } },
+      _count: { memberId: true },
+      orderBy: { _count: { memberId: 'desc' } },
+      take: 5,
+    });
+    const memberIds = grouped.map((g) => g.memberId).filter((id): id is string => !!id);
+    const members = await this.prisma.member.findMany({
+      where: { id: { in: memberIds } },
+      select: { id: true, memberCode: true, user: { select: { firstName: true, lastName: true } } },
+    });
+    const mostActiveMembers = grouped.map((g) => {
+      const m = members.find((x) => x.id === g.memberId);
+      return {
+        memberId: g.memberId,
+        memberCode: m?.memberCode ?? null,
+        name: m ? `${m.user.firstName} ${m.user.lastName}` : 'Unknown',
+        visitCount: g._count.memberId,
+      };
+    });
+
+    return { avgVisitDuration, dailyTrend, monthlyTrend, peakHours, mostActiveMembers };
+  }
 }

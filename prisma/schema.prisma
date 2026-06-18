@@ -511,6 +511,7 @@ model Attendance {
   gymId        String
   checkInTime  DateTime         @default(now())
   checkOutTime DateTime?
+  durationMinutes Int?
   date         DateTime         @default(now()) @db.Date
   status       AttendanceStatus @default(PRESENT)
   method       CheckInMethod    @default(MANUAL)
