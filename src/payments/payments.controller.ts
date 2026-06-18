@@ -8,6 +8,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RecordCashPaymentDto } from './dto/record-cash-payment.dto';
 
 // Webhook handler — NO auth guard (called by Razorpay server-to-server)
 @ApiTags('Payments')
@@ -89,7 +90,7 @@ export class PaymentsController {
   @Post('cash')
   @UseGuards(RolesGuard)
   @Roles(Role.GYM_ADMIN)
-  recordCash(@Body() body: any, @CurrentUser() user: any) {
+  recordCash(@Body() body: RecordCashPaymentDto, @CurrentUser() user: any) {
     return this.paymentsService.recordCashPayment({ ...body, gymId: user.gymId });
   }
 }

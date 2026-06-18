@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { CreateMembershipPlanDto, UpdateMembershipPlanDto } from './dto/membership-plan.dto';
 
 @ApiTags('Memberships')
 @ApiBearerAuth()
@@ -50,7 +51,7 @@ export class MembershipsController {
   @Post('plans')
   @Roles(Role.GYM_ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Create a membership plan' })
-  createPlan(@Body() body: any, @CurrentUser() user: any) {
+  createPlan(@Body() body: CreateMembershipPlanDto, @CurrentUser() user: any) {
     const gymId = user.role === Role.GYM_ADMIN ? user.gymId : (body.gymId ?? user.gymId);
     return this.membershipsService.createPlan(body, gymId);
   }
@@ -65,7 +66,7 @@ export class MembershipsController {
   @Patch('plans/:planId')
   @Roles(Role.GYM_ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Update a membership plan' })
-  updatePlan(@Param('planId') planId: string, @Body() body: any, @CurrentUser() user: any) {
+  updatePlan(@Param('planId') planId: string, @Body() body: UpdateMembershipPlanDto, @CurrentUser() user: any) {
     const gymId = user.role === Role.GYM_ADMIN ? user.gymId : (body.gymId ?? user.gymId);
     return this.membershipsService.updatePlan(planId, body, gymId);
   }

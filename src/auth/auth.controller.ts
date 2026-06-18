@@ -125,6 +125,14 @@ export class AuthController {
     return this.authService.getProfile(userId);
   }
 
+  @Get('socket-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Short-lived token for the Socket.io handshake (httpOnly cookie cannot reach a cross-domain socket origin)' })
+  getSocketToken(@CurrentUser() user: any) {
+    return this.authService.issueSocketToken(user.id, user.email, user.role);
+  }
+
   @Patch('change-password')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

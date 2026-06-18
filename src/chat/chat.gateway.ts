@@ -27,9 +27,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(client: Socket) {
     try {
-      // Read JWT from httpOnly cookie (sent automatically by browser on WS upgrade)
+      // Prefer the explicit handshake token (split-domain deployments — the httpOnly
+      // cookie is scoped to the Vercel proxy origin and never reaches this socket
+      // origin). Fall back to the cookie for same-origin/local-dev setups.
       const cookies = cookieParse.parse(client.handshake.headers.cookie ?? '');
-      const token = cookies['ab_token'];
+      const token = client.handshake.auth?.token ?? cookies['ab_token'];
       if (!token) { client.disconnect(); return; }
       const payload = this.jwtService.verify(token, { secret: this.configService.get('JWT_SECRET') }) as any;
       const user = await this.prisma.user.findUnique({

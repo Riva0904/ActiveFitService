@@ -6,6 +6,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { ApplyLeaveDto } from './dto/apply-leave.dto';
+import { ReviewLeaveDto } from './dto/review-leave.dto';
 
 @ApiTags('Leave Requests')
 @ApiBearerAuth()
@@ -17,7 +19,7 @@ export class LeaveController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles(Role.STAFF, Role.TRAINER)
-  applyLeave(@CurrentUser() user: any, @Body() body: any) {
+  applyLeave(@CurrentUser() user: any, @Body() body: ApplyLeaveDto) {
     return this.leaveService.applyLeave(user.gymId, user.id, body);
   }
 
@@ -38,14 +40,14 @@ export class LeaveController {
   @Patch(':id/approve')
   @UseGuards(RolesGuard)
   @Roles(Role.GYM_ADMIN)
-  approveLeave(@Param('id') id: string, @CurrentUser() user: any, @Body() body: any) {
+  approveLeave(@Param('id') id: string, @CurrentUser() user: any, @Body() body: ReviewLeaveDto) {
     return this.leaveService.reviewLeave(user.gymId, id, user.id, 'APPROVED', body.adminNote);
   }
 
   @Patch(':id/reject')
   @UseGuards(RolesGuard)
   @Roles(Role.GYM_ADMIN)
-  rejectLeave(@Param('id') id: string, @CurrentUser() user: any, @Body() body: any) {
+  rejectLeave(@Param('id') id: string, @CurrentUser() user: any, @Body() body: ReviewLeaveDto) {
     return this.leaveService.reviewLeave(user.gymId, id, user.id, 'REJECTED', body.adminNote);
   }
 }

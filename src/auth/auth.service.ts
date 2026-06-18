@@ -135,7 +135,8 @@ export class AuthService {
     await this.emailService.sendWelcomeEmail(dto.email, user.firstName, user.role);
 
     const tokens = await this.generateTokens(user.id, user.email, user.role);
-    return { message: 'Email verified successfully!', ...tokens, user: { ...user, isEmailVerified: true } };
+    const { password: _, refreshToken: __, ...safeUser } = user;
+    return { message: 'Email verified successfully!', ...tokens, user: { ...safeUser, isEmailVerified: true } };
   }
 
   // ─── Login ─────────────────────────────────────────────────────────────────
@@ -164,7 +165,7 @@ export class AuthService {
     await this.auditService.log({ userId: user.id, gymId: user.gymId ?? undefined, action: 'USER_LOGIN', entity: 'User', entityId: user.id });
 
     const tokens = await this.generateTokens(user.id, user.email, user.role);
-    const { password: _, member, ...userData } = user as any;
+    const { password: _, refreshToken: __, member, ...userData } = user as any;
     return {
       user: {
         ...userData,
@@ -285,6 +286,20 @@ export class AuthService {
         gym: { select: { id: true, name: true, logo: true, address: true } },
       },
     });
+  }
+
+  // ─── Socket.io handshake token ─────────────────────────────────────────────
+  // httpOnly cookies set on the Vercel proxy origin never reach Render's socket
+  // origin in this split-domain deployment. The frontend fetches this short-lived
+  // token over the (cookie-authenticated, same-origin) REST proxy and passes it
+  // explicitly in the socket.io `auth` payload instead.
+
+  async issueSocketToken(userId: string, email: string, role: string) {
+    const token = this.jwtService.sign(
+      { sub: userId, email, role },
+      { secret: this.configService.get('JWT_SECRET'), expiresIn: '60s' },
+    );
+    return { token };
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────────

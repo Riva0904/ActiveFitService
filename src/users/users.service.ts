@@ -283,7 +283,11 @@ export class UsersService {
 
   async deactivate(id: string) {
     await this.findOne(id);
-    return this.prisma.user.update({ where: { id }, data: { isActive: false } });
+    return this.prisma.user.update({
+      where: { id },
+      data: { isActive: false },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true },
+    });
   }
 
   /** Data-portability export of everything directly owned by the requesting user. */
@@ -311,7 +315,11 @@ export class UsersService {
 
   async activate(id: string) {
     await this.findOne(id);
-    return this.prisma.user.update({ where: { id }, data: { isActive: true } });
+    return this.prisma.user.update({
+      where: { id },
+      data: { isActive: true },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true },
+    });
   }
 
   async remove(id: string) {
