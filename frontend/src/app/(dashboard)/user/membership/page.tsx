@@ -102,7 +102,7 @@ export default function UserMembershipPage() {
           key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
           amount: orderRes.amount * 100,
           currency: 'INR',
-          name: 'ActiveBoost',
+          name: 'ActiveFit',
           description: `${getLabel(selectedPlan)} Membership`,
           order_id: orderRes.orderId,
           handler: async (response: any) => {

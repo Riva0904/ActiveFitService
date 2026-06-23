@@ -1,4 +1,4 @@
-# ActiveBoost — Deployment Guide
+# ActiveFit — Deployment Guide
 
 ## Quick Start (Docker Compose)
 
@@ -178,6 +178,6 @@ pm2 startup
 
 # Monitor
 pm2 status
-pm2 logs activeboost-api
+pm2 logs activefit-api
 pm2 monit
 ```

@@ -83,7 +83,7 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight">Platform Analytics</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">Real-time insights across the ActiveBoost network</p>
+        <p className="text-muted-foreground text-sm mt-0.5">Real-time insights across the ActiveFit network</p>
       </div>
 
       {/* Stat Cards */}

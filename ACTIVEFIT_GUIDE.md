@@ -1,8 +1,8 @@
-# ActiveBoost — Workflow, Test Guide & Client Demo Script
+# ActiveFit — Workflow, Test Guide & Client Demo Script
 
 ## 1. Overview & Architecture
 
-ActiveBoost is a multi-tenant gym management SaaS. A single platform hosts many gyms ("tenants"); each gym has its own admin, staff, trainers, and members, isolated by `gymId`. On top of that sits a Super Admin layer that oversees all gyms platform-wide.
+ActiveFit is a multi-tenant gym management SaaS. A single platform hosts many gyms ("tenants"); each gym has its own admin, staff, trainers, and members, isolated by `gymId`. On top of that sits a Super Admin layer that oversees all gyms platform-wide.
 
 **Stack:**
 
@@ -10,10 +10,10 @@ ActiveBoost is a multi-tenant gym management SaaS. A single platform hosts many 
 Browser
   │
   ▼
-Next.js 16 frontend (Vercel)         https://active-boost-ui.vercel.app
+Next.js 16 frontend (Vercel)         https://active-fit-ui.vercel.app
   │  /api/v1/*  rewritten by next.config.js
   ▼
-NestJS backend (Render)              https://activeboost-api.onrender.com
+NestJS backend (Render)              https://activefit-api.onrender.com
   │
   ▼
 PostgreSQL (Neon, via Prisma)
@@ -23,11 +23,11 @@ PostgreSQL (Neon, via Prisma)
 
 One consequence: Socket.io (live chat) **cannot** be proxied this way — Vercel rewrites can't hold a WebSocket connection open — so the browser connects directly cross-domain to Render for chat. Since the cookie doesn't reach that connection, the frontend fetches a short-lived token over the (cookie-authenticated) REST proxy via `GET /auth/socket-token` and passes it explicitly in the socket handshake.
 
-**Deploy note (important):** Render's `activeboost-api` service pulls from a **separate** mirror repo (`Riva0904/ActiveBoostService`), not this monorepo. A normal `git push` to this repo's `main` does **not** reach production for the backend. Any backend change needs an extra step:
+**Deploy note (important):** Render's `activefit-api` service pulls from a **separate** mirror repo (`Riva0904/ActiveFitService`), not this monorepo. A normal `git push` to this repo's `main` does **not** reach production for the backend. Any backend change needs an extra step:
 
 ```bash
 git subtree split --prefix=backend -b backend-split
-git push <ActiveBoostService-remote> backend-split:main --force
+git push <ActiveFitService-remote> backend-split:main --force
 ```
 then trigger a Render deploy (dashboard "Manual Deploy" or the Render API). The frontend has no such issue — Vercel deploys from this repo directly (though in practice during this session the Vercel git auto-deploy webhook didn't fire reliably either; `vercel --prod` from `frontend/` is the reliable fallback).
 
@@ -35,7 +35,7 @@ then trigger a Render deploy (dashboard "Manual Deploy" or the Render API). The 
 
 ## 1a. Screenshots (live production)
 
-Captured directly from `https://active-boost-ui.vercel.app` against seeded accounts.
+Captured directly from `https://active-fit-ui.vercel.app` against seeded accounts.
 
 | | |
 |---|---|
@@ -94,7 +94,7 @@ Captured directly from `https://active-boost-ui.vercel.app` against seeded accou
 
 ## 3. Test Case Matrix
 
-All rows below were either directly executed against production (`https://active-boost-ui.vercel.app`) this session, or are recommended additions following the same pattern. ✅ = verified passing live. 🆕 = recommended, not yet run.
+All rows below were either directly executed against production (`https://active-fit-ui.vercel.app`) this session, or are recommended additions following the same pattern. ✅ = verified passing live. 🆕 = recommended, not yet run.
 
 ### Auth
 
@@ -176,7 +176,7 @@ All rows below were either directly executed against production (`https://active
 |---|---|---|---|
 | Get/create own conversation (REST) | `GET /chat/my-conversation` | `200`, conversation object | ✅ |
 | Admin views all gym conversations | `GET /chat/conversations` | `200`, list including the member's | ✅ |
-| Live socket connect, cross-domain | connect to `wss://activeboost-api.onrender.com` with `auth.token` from `/auth/socket-token` | connects successfully | ✅ (fixed — previously never connected; cookie never reached Render's socket origin) |
+| Live socket connect, cross-domain | connect to `wss://activefit-api.onrender.com` with `auth.token` from `/auth/socket-token` | connects successfully | ✅ (fixed — previously never connected; cookie never reached Render's socket origin) |
 | Send message via socket | `chat:send` event after connect | message delivered, conversation `lastMessage` updated | 🆕 |
 
 ### Role-Permission Boundaries (cross-cutting)
@@ -192,7 +192,7 @@ All rows below were either directly executed against production (`https://active
 ## 4. Client Demo Script
 
 ### Prerequisites
-- Open **https://active-boost-ui.vercel.app/login** in a clean browser tab
+- Open **https://active-fit-ui.vercel.app/login** in a clean browser tab
 - Seeded super-admin login: `superadmin@activeboost.com` / `Password@123`
 - **Known limitation to pre-empt:** the email provider (Resend) is in test mode and can only deliver to its own verified address. If you register a fresh gym live, the OTP email **will not arrive** in the client's inbox. Either:
   (a) pre-register a demo gym beforehand and skip the live-registration step, or
@@ -230,6 +230,7 @@ All rows below were either directly executed against production (`https://active
 - Member dashboard shows a brief "Forbidden resource" toast on load (one API call 403s for the MEMBER role) — cosmetic, didn't block any tested functionality, not yet root-caused.
 - `(dashboard)/layout.tsx` reads auth state from Zustand's `localStorage`-persisted store, which hydrates asynchronously. A user hard-refreshing or opening a bookmarked deep link (e.g. `/admin/members`) can hit a race where the layout's `useEffect` sees `user: null` before hydration finishes, redirects to `/login`, and middleware (seeing the still-valid cookie) bounces them back to the role's dashboard root — losing the deep link. Intermittent, not yet fixed.
 - **Resend email domain unverified** — real signup/OTP/password-reset emails will not deliver to any address except the account owner's. Needs a verified sending domain at resend.com/domains before any real (non-test) user can complete email-based flows.
-- **Backend deploy pipeline is fragile** — Render pulls from a separate, manually-synced mirror repo (`ActiveBoostService`), not this monorepo. Every backend change needs the extra `git subtree split` + force-push step documented in §1, or Render's Git source should be repointed at this repo directly with `rootDir: backend`.
+- **Backend deploy pipeline is fragile** — Render pulls from a separate, manually-synced mirror repo (`ActiveFitService`), not this monorepo. Every backend change needs the extra `git subtree split` + force-push step documented in §1, or Render's Git source should be repointed at this repo directly with `rootDir: backend`.
 - Super-admin "gym growth" chart currently uses a randomized trend rather than real historical data.
 - No automated test suite was run as part of this guide — all "✅" rows above were verified by direct API calls against production, not by a CI test suite.
+

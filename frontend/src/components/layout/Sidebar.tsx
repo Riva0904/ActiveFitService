@@ -197,7 +197,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
             </div>
             <div>
-              <span className="font-extrabold text-base tracking-tight">ActiveBoost</span>
+              <span className="font-extrabold text-base tracking-tight">ActiveFit</span>
               <div className={cn('inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-md ml-1', role.badgeColor)}>
                 {role.badge}
               </div>

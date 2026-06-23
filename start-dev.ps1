@@ -1,9 +1,9 @@
-# ActiveBoost — Clean Dev Start
+# ActiveFit — Clean Dev Start
 # Double-click or run: powershell -ExecutionPolicy Bypass -File start-dev.ps1
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "   ActiveBoost  -  Starting Dev Servers    " -ForegroundColor Cyan
+Write-Host "   ActiveFit  -  Starting Dev Servers    " -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -23,7 +23,7 @@ Start-Sleep -Milliseconds 800
 
 # ── 2. Delete stale .next cache ────────────────────────────────────────────
 Write-Host "[2/4] Deleting stale .next cache..." -ForegroundColor Yellow
-$nextPath = "c:\Ajith\ActiveBoost\frontend\.next"
+$nextPath = "c:\Ajith\ActiveFit\frontend\.next"
 if (Test-Path $nextPath) {
   Remove-Item -Recurse -Force $nextPath
   Write-Host "   .next deleted" -ForegroundColor DarkGray
@@ -35,9 +35,9 @@ if (Test-Path $nextPath) {
 Write-Host "[3/4] Opening Backend terminal..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList @(
   "-NoExit", "-Command",
-  "`$host.ui.RawUI.WindowTitle='ActiveBoost - API :3001'; " +
-  "Write-Host '  ActiveBoost Backend  ' -ForegroundColor Cyan -BackgroundColor DarkBlue; " +
-  "Set-Location 'c:\Ajith\ActiveBoost\backend'; " +
+  "`$host.ui.RawUI.WindowTitle='ActiveFit - API :3001'; " +
+  "Write-Host '  ActiveFit Backend  ' -ForegroundColor Cyan -BackgroundColor DarkBlue; " +
+  "Set-Location 'c:\Ajith\ActiveFit\backend'; " +
   "node dist/main.js"
 )
 Start-Sleep -Seconds 4
@@ -46,9 +46,9 @@ Start-Sleep -Seconds 4
 Write-Host "[4/4] Opening Frontend terminal (fresh compile)..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList @(
   "-NoExit", "-Command",
-  "`$host.ui.RawUI.WindowTitle='ActiveBoost - UI :3000'; " +
-  "Write-Host '  ActiveBoost Frontend  ' -ForegroundColor Cyan -BackgroundColor DarkBlue; " +
-  "Set-Location 'c:\Ajith\ActiveBoost\frontend'; " +
+  "`$host.ui.RawUI.WindowTitle='ActiveFit - UI :3000'; " +
+  "Write-Host '  ActiveFit Frontend  ' -ForegroundColor Cyan -BackgroundColor DarkBlue; " +
+  "Set-Location 'c:\Ajith\ActiveFit\frontend'; " +
   "npm run dev"
 )
 

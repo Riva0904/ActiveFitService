@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: activeboost-api
+    name: activefit-api
     runtime: node
     plan: free
     rootDir: backend

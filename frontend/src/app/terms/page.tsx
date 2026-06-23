@@ -7,7 +7,7 @@ export default function TermsOfServicePage() {
       <p>Last updated: placeholder — replace with your actual terms before launch.</p>
 
       <h2>1. Acceptance of Terms</h2>
-      <p>By using ActiveBoost, you agree to these terms and your gym&apos;s membership policies.</p>
+      <p>By using ActiveFit, you agree to these terms and your gym&apos;s membership policies.</p>
 
       <h2>2. Memberships and Payments</h2>
       <p>Membership plans, pricing, and renewal terms are set by your gym. Payments are processed via Razorpay (INR only).</p>
@@ -19,7 +19,7 @@ export default function TermsOfServicePage() {
       <p>Either party may terminate the membership per your gym&apos;s cancellation policy. You may request account deletion at any time.</p>
 
       <h2>5. Limitation of Liability</h2>
-      <p>ActiveBoost provides the platform as-is; your gym is responsible for the services delivered at its facility.</p>
+      <p>ActiveFit provides the platform as-is; your gym is responsible for the services delivered at its facility.</p>
     </main>
   );
 }

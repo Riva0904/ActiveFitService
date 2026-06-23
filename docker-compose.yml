@@ -4,18 +4,18 @@ services:
   # ─── PostgreSQL ─────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    container_name: activeboost_db
+    container_name: activefit_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: activeboost_db
-      POSTGRES_USER: activeboost
-      POSTGRES_PASSWORD: activeboost_secret_pass
+      POSTGRES_DB: activefit_db
+      POSTGRES_USER: activefit
+      POSTGRES_PASSWORD: activefit_secret_pass
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U activeboost -d activeboost_db"]
+      test: ["CMD-SHELL", "pg_isready -U activefit -d activefit_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,7 +25,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: activeboost_api
+    container_name: activefit_api
     restart: unless-stopped
     depends_on:
       postgres:
@@ -33,7 +33,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: postgresql://activeboost:activeboost_secret_pass@postgres:5432/activeboost_db
+      DATABASE_URL: postgresql://activefit:activefit_secret_pass@postgres:5432/activefit_db
       JWT_SECRET: ${JWT_SECRET:-change-this-in-production-min-32-chars}
       JWT_EXPIRES_IN: 15m
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-this-refresh-secret-min-32-chars}
@@ -44,7 +44,7 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
-      EMAIL_FROM: ${EMAIL_FROM:-ActiveBoost <noreply@activeboost.com>}
+      EMAIL_FROM: ${EMAIL_FROM:-ActiveFit <noreply@activefit.com>}
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
       RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
@@ -62,7 +62,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.frontend
-    container_name: activeboost_web
+    container_name: activefit_web
     restart: unless-stopped
     depends_on:
       - backend
@@ -75,7 +75,7 @@ services:
   # ─── Nginx Reverse Proxy ─────────────────────────────────────────────────
   nginx:
     image: nginx:alpine
-    container_name: activeboost_nginx
+    container_name: activefit_nginx
     restart: unless-stopped
     depends_on:
       - backend
@@ -89,4 +89,4 @@ services:
 
 volumes:
   postgres_data:
-    name: activeboost_postgres_data
+    name: activefit_postgres_data

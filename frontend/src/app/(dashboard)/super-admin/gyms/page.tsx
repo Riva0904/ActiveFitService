@@ -506,7 +506,7 @@ export default function GymsPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Gym Network</h1>
-          <p className="text-muted-foreground mt-0.5">{summary.total} gyms on the ActiveBoost platform</p>
+          <p className="text-muted-foreground mt-0.5">{summary.total} gyms on the ActiveFit platform</p>
         </div>
         <button
           onClick={() => setShowAdd(true)}

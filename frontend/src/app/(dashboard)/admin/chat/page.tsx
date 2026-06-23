@@ -462,7 +462,7 @@ export default function AdminChatPage() {
                       Super Admin
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">Direct line to the ActiveBoost platform team</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Direct line to the ActiveFit platform team</p>
                 </div>
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button

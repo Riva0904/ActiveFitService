@@ -19,7 +19,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: { default: 'ActiveBoost', template: '%s — ActiveBoost' },
+  title: { default: 'ActiveFit', template: '%s — ActiveFit' },
   description: 'Premium Gym Management SaaS Platform for modern fitness businesses',
 };
 

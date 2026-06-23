@@ -87,7 +87,7 @@ function ResetPasswordForm() {
           <div className="w-9 h-9 gradient-brand rounded-xl flex items-center justify-center">
             <Zap className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-xl">ActiveBoost</span>
+          <span className="font-bold text-xl">ActiveFit</span>
         </div>
 
         <div className="bg-card rounded-2xl border border-border p-8 shadow-xl shadow-black/5">

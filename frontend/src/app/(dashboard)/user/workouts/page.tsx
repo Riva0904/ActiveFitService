@@ -58,7 +58,7 @@ export default function WorkoutsPage() {
           key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
           amount: orderRes.amount * 100,
           currency: 'INR',
-          name: 'ActiveBoost',
+          name: 'ActiveFit',
           description: `${pkg.name} — ${pkg.durationDays ?? 30} days`,
           order_id: orderRes.orderId,
           handler: async (response: any) => {

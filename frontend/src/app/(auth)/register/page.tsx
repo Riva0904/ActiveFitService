@@ -95,7 +95,7 @@ export default function RegisterPage() {
           <div className="w-10 h-10 rounded-xl gradient-brand flex items-center justify-center">
             <Zap className="w-5 h-5 text-white" />
           </div>
-          <span className="font-extrabold text-xl">ActiveBoost</span>
+          <span className="font-extrabold text-xl">ActiveFit</span>
         </div>
 
         {/* Step progress */}

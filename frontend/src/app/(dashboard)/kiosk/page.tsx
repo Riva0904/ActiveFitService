@@ -87,7 +87,7 @@ export default function KioskPage() {
           <div className="w-12 h-12 gradient-brand rounded-2xl flex items-center justify-center shadow-brand">
             <QrCode className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight">ActiveBoost</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">ActiveFit</h1>
         </div>
         <p className="text-muted-foreground font-medium">Gym Check-in / Check-out</p>
       </div>

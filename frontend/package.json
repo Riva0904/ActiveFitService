@@ -1,7 +1,7 @@
 {
-  "name": "activeboost-frontend",
+  "name": "activefit-frontend",
   "version": "1.0.0",
-  "description": "ActiveBoost Multi-Tenant Gym Management SaaS - Next.js Frontend",
+  "description": "ActiveFit Multi-Tenant Gym Management SaaS - Next.js Frontend",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

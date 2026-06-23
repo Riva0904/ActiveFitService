@@ -41,7 +41,7 @@ function BookingModal({ trainer, onClose, onSuccess }: any) {
             key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
             amount: res.payment.amount * 100,
             currency: 'INR',
-            name: 'ActiveBoost',
+            name: 'ActiveFit',
             description: `PT Session with ${user.firstName} — ${form.duration} min`,
             order_id: res.payment.orderId,
             handler: async (response: any) => {

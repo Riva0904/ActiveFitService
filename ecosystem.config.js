@@ -9,7 +9,7 @@ module.exports = {
   apps: [
     // ─── Backend ──────────────────────────────────────────────────────────────
     {
-      name: 'activeboost-api',
+      name: 'activefit-api',
       cwd: './backend',
       script: 'dist/main.js',
       instances: 'max',          // Use all CPU cores
@@ -34,7 +34,7 @@ module.exports = {
 
     // ─── Frontend ─────────────────────────────────────────────────────────────
     {
-      name: 'activeboost-web',
+      name: 'activefit-web',
       cwd: './frontend',
       script: '.next/standalone/server.js',
       instances: 2,

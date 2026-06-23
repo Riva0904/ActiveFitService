@@ -89,7 +89,7 @@ function LoginForm() {
             <Zap className="w-6 h-6 text-white" />
           </div>
           <div>
-            <div className="text-white font-extrabold text-[22px] tracking-tight">ActiveBoost</div>
+            <div className="text-white font-extrabold text-[22px] tracking-tight">ActiveFit</div>
             <div className="text-white/60 text-xs">Gym Management Platform</div>
           </div>
         </div>
@@ -119,7 +119,7 @@ function LoginForm() {
         </div>
 
         <div className="relative z-10 text-white/35 text-xs">
-          © 2025 ActiveBoost · Privacy · Terms
+          © 2025 ActiveFit · Privacy · Terms
         </div>
       </div>
 
@@ -134,7 +134,7 @@ function LoginForm() {
             <div className="w-10 h-10 rounded-xl gradient-brand flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" />
             </div>
-            <span className="font-extrabold text-xl">ActiveBoost</span>
+            <span className="font-extrabold text-xl">ActiveFit</span>
           </div>
 
           {/* Heading */}
