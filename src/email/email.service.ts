@@ -10,7 +10,7 @@ export interface SendMailOptions {
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private readonly fromName = 'ActiveFit';
+  private readonly fromName = 'ActiveBoost';
   private readonly fromEmail: string;
   private readonly resendApiKey: string;
 
@@ -58,17 +58,17 @@ export class EmailService {
     const purposeDesc = {
       EMAIL_VERIFICATION: 'Complete your account setup by verifying your email address.',
       LOGIN_2FA: 'Use this code to complete your login.',
-      PASSWORD_RESET: 'Use this code to reset your ActiveFit password.',
+      PASSWORD_RESET: 'Use this code to reset your ActiveBoost password.',
       PHONE_VERIFICATION: 'Use this code to verify your phone number.',
     }[purpose] ?? 'Use this code to verify your identity.';
 
     const html = this.getOtpEmailTemplate(name, otp, purposeLabel, purposeDesc);
-    return this.sendMail({ to, subject: `${purposeLabel} — ${otp} is your ActiveFit code`, html });
+    return this.sendMail({ to, subject: `${purposeLabel} — ${otp} is your ActiveBoost code`, html });
   }
 
   async sendWelcomeEmail(to: string, name: string, role: string): Promise<boolean> {
     const html = this.getWelcomeTemplate(name, role);
-    return this.sendMail({ to, subject: `Welcome to ActiveFit, ${name}!`, html });
+    return this.sendMail({ to, subject: `Welcome to ActiveBoost, ${name}!`, html });
   }
 
   async sendMembershipRenewalReminder(to: string, name: string, daysLeft: number, planType: string): Promise<boolean> {
@@ -95,9 +95,9 @@ export class EmailService {
       ? `<tr><td style="color:#666; padding:8px 0; border-top:1px solid #e8ecf0;">Member ID</td><td style="font-weight:900; font-family:monospace; font-size:16px; text-align:right; color:#059669;">${memberCode}</td></tr>`
       : '';
     const html = this.getEmailWrapper(`
-      <h1>Your ActiveFit Account is Ready 🎉</h1>
+      <h1>Your ActiveBoost Account is Ready 🎉</h1>
       <p>Hi <span class="highlight">${name}</span>,</p>
-      <p>An administrator has created your <strong>ActiveFit</strong> account with the role of <span class="badge">${label}</span>.</p>
+      <p>An administrator has created your <strong>ActiveBoost</strong> account with the role of <span class="badge">${label}</span>.</p>
       <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:24px; margin:20px 0;">
         <p style="font-size:13px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">Your Login Credentials</p>
         <table style="width:100%; font-size:15px; border-collapse:collapse;">
@@ -113,12 +113,12 @@ export class EmailService {
         <a href="${loginUrl}" class="btn">Login to Dashboard →</a>
       </div>
     `);
-    return this.sendMail({ to, subject: `Your ActiveFit ${label} account is ready`, html });
+    return this.sendMail({ to, subject: `Your ActiveBoost ${label} account is ready`, html });
   }
 
   async sendPasswordChangedAlert(to: string, name: string): Promise<boolean> {
     const html = this.getPasswordChangedTemplate(name);
-    return this.sendMail({ to, subject: '🔐 Your ActiveFit password was changed', html });
+    return this.sendMail({ to, subject: '🔐 Your ActiveBoost password was changed', html });
   }
 
   // ─── Email Templates ────────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ export class EmailService {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ActiveFit</title>
+  <title>ActiveBoost</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f4f6f8; color: #1a1a2e; }
@@ -161,13 +161,13 @@ export class EmailService {
     <div class="header">
       <div class="header-logo">
         <div class="header-logo-icon">⚡</div>
-        <span class="header-title">ActiveFit</span>
+        <span class="header-title">ActiveBoost</span>
       </div>
       <p class="header-subtitle">Premium Gym Management Platform</p>
     </div>
     <div class="body">${content}</div>
     <div class="footer">
-      <p>© 2025 ActiveFit. All rights reserved.<br/>
+      <p>© 2025 ActiveBoost. All rights reserved.<br/>
       This email was sent to you because an action was performed on your account.<br/>
       If you didn't request this, please <a href="mailto:activeboost8@gmail.com">contact support</a>.</p>
     </div>
@@ -187,7 +187,7 @@ export class EmailService {
         <p class="otp-expiry">⏰ This code expires in <strong>10 minutes</strong></p>
       </div>
       <div class="alert-box">
-        🔒 <strong>Security Notice:</strong> Never share this code with anyone. ActiveFit will never ask for your OTP via phone or chat.
+        🔒 <strong>Security Notice:</strong> Never share this code with anyone. ActiveBoost will never ask for your OTP via phone or chat.
       </div>
       <div class="divider"></div>
       <p style="font-size:13px; color:#8a9ab0;">If you didn't request this code, you can safely ignore this email. Your account is secure.</p>
@@ -228,9 +228,9 @@ export class EmailService {
         <li>View platform-wide analytics</li>
       `;
     return this.getEmailWrapper(`
-      <h1>Welcome to ActiveFit! 🎉</h1>
+      <h1>Welcome to ActiveBoost! 🎉</h1>
       <p>Hi <span class="highlight">${name}</span>,</p>
-      <p>You're now part of the <strong>ActiveFit</strong> family! Your account has been created successfully with the role of <span class="badge">${roleLabel}</span>.</p>
+      <p>You're now part of the <strong>ActiveBoost</strong> family! Your account has been created successfully with the role of <span class="badge">${roleLabel}</span>.</p>
       <div class="divider"></div>
       <p><strong>What you can do:</strong></p>
       <ul style="padding-left:20px; color:#4a5568; font-size:15px; line-height:2;">${bullets}</ul>
@@ -276,7 +276,7 @@ export class EmailService {
           <tr><td style="color:#666; padding:8px 0; border-top:1px solid #e8ecf0;">Status</td><td style="text-align:right;"><span style="background:#d1fae5; color:#059669; padding:4px 12px; border-radius:999px; font-size:13px; font-weight:700;">✅ PAID</span></td></tr>
         </table>
       </div>
-      <p style="font-size:13px; color:#8a9ab0;">Keep this email as your payment receipt. You can also view all your invoices in the ActiveFit app.</p>
+      <p style="font-size:13px; color:#8a9ab0;">Keep this email as your payment receipt. You can also view all your invoices in the ActiveBoost app.</p>
     `);
   }
 
@@ -284,7 +284,7 @@ export class EmailService {
     return this.getEmailWrapper(`
       <h1>🔐 Password Changed</h1>
       <p>Hi <span class="highlight">${name}</span>,</p>
-      <p>Your ActiveFit account password was successfully changed.</p>
+      <p>Your ActiveBoost account password was successfully changed.</p>
       <div class="alert-box" style="background:#fff0f0; border-color:#f87171; color:#991b1b;">
         ⚠️ <strong>Wasn't you?</strong> If you didn't change your password, your account may be compromised. Please contact support immediately.
       </div>

@@ -10,5 +10,6 @@ export class PaymentCompletedEvent {
     public readonly promoCodeId?: string,
     public readonly dietPlanId?: string,
     public readonly workoutPlanId?: string,
+    public readonly membershipPlanId?: string,
   ) {}
 }

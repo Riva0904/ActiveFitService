@@ -140,6 +140,7 @@ export class PaymentsService {
         memberId: member.id,
         gymId,
         promoCodeId: promoCodeId ?? null,
+        membershipPlanId: type === 'MEMBERSHIP' ? membershipPlanId ?? null : null,
       },
     });
 
@@ -199,6 +200,7 @@ export class PaymentsService {
         payment.promoCodeId ?? undefined,
         (payment as any).dietPlanId ?? undefined,
         (payment as any).workoutPlanId ?? undefined,
+        (payment as any).membershipPlanId ?? undefined,
       ),
     );
 
@@ -259,6 +261,7 @@ export class PaymentsService {
         payment.promoCodeId ?? undefined,
         (payment as any).dietPlanId ?? undefined,
         (payment as any).workoutPlanId ?? undefined,
+        (payment as any).membershipPlanId ?? undefined,
       ),
     );
 

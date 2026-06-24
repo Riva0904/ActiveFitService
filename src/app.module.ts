@@ -56,8 +56,8 @@ import { MobileModule } from './mobile/mobile.module';
       validationOptions: { allowUnknown: true, abortEarly: false },
     }),
     ThrottlerModule.forRoot([
-      { name: 'short', ttl: 1000, limit: 5 },    // max 5 req/sec per IP (burst protection)
-      { name: 'medium', ttl: 60000, limit: 100 }, // max 100 req/min per IP (general API)
+      { name: 'short', ttl: 1000, limit: 20 },   // max 20 req/sec per IP (dashboards fire several parallel GETs on mount)
+      { name: 'medium', ttl: 60000, limit: 300 }, // max 300 req/min per IP (general API)
     ]),
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot({ wildcard: false, delimiter: '.', maxListeners: 20 }),

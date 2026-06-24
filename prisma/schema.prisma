@@ -575,6 +575,7 @@ model Payment {
   platformCommission Float             @default(0)
   dietPlanId         String?
   workoutPlanId      String?
+  membershipPlanId   String?
   paidAt             DateTime?
   deletedAt          DateTime?
   createdAt          DateTime          @default(now())
@@ -586,6 +587,7 @@ model Payment {
   promoCode          PromoCode?        @relation(fields: [promoCodeId], references: [id])
   workoutPlan        WorkoutPlan?      @relation(fields: [workoutPlanId], references: [id])
   invoice            Invoice?
+  supplementOrder    SupplementOrder?
 
   @@index([memberId])
   @@index([gymId])
@@ -1033,6 +1035,7 @@ model SupplementOrder {
   id          String                @id @default(uuid())
   gymId       String
   userId      String
+  paymentId   String?               @unique
   orderNumber String                @unique
   totalAmount Float
   status      SupplementOrderStatus @default(PENDING)
@@ -1042,6 +1045,7 @@ model SupplementOrder {
 
   gym         Gym                   @relation(fields: [gymId], references: [id])
   user        User                  @relation(fields: [userId], references: [id])
+  payment     Payment?              @relation(fields: [paymentId], references: [id])
   items       SupplementOrderItem[]
 
   @@index([gymId])

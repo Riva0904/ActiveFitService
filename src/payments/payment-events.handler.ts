@@ -1,8 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
+import { SupplementsService } from '../supplements/supplements.service';
+import { MembershipsService } from '../memberships/memberships.service';
 import { PAYMENT_COMPLETED, PaymentCompletedEvent } from './events/payment.events';
 
 @Injectable()
@@ -13,10 +15,18 @@ export class PaymentEventsHandler {
     private prisma: PrismaService,
     private referralsService: ReferralsService,
     private promoCodesService: PromoCodesService,
+    @Inject(forwardRef(() => SupplementsService)) private supplementsService: SupplementsService,
+    private membershipsService: MembershipsService,
   ) {}
 
   @OnEvent(PAYMENT_COMPLETED, { async: true })
   async handlePaymentCompleted(event: PaymentCompletedEvent) {
+    try {
+      await this.handleMembershipActivation(event);
+    } catch (err) {
+      this.logger.error(`[payment.completed] Membership activation failed for ${event.paymentId}: ${err.message}`);
+    }
+
     try {
       await this.handleMembershipRewards(event);
     } catch (err) {
@@ -36,10 +46,25 @@ export class PaymentEventsHandler {
     }
 
     try {
+      await this.handleSupplementOrderCreation(event);
+    } catch (err) {
+      this.logger.error(`[payment.completed] Supplement order creation failed for ${event.paymentId}: ${err.message}`);
+    }
+
+    try {
       await this.handlePlatformCommission(event);
     } catch (err) {
       this.logger.error(`[payment.completed] Commission calc failed for ${event.paymentId}: ${err.message}`);
     }
+  }
+
+  private async handleMembershipActivation(event: PaymentCompletedEvent) {
+    if (event.type !== 'MEMBERSHIP' || !event.membershipPlanId) return;
+
+    const member = await this.prisma.member.findUnique({ where: { id: event.memberId }, select: { userId: true } });
+    if (!member) return;
+
+    await this.membershipsService.activateFromPayment(member.userId, event.gymId, event.membershipPlanId, event.amount);
   }
 
   private async handleMembershipRewards(event: PaymentCompletedEvent) {
@@ -117,6 +142,26 @@ export class PaymentEventsHandler {
         isActive: true,
       },
     });
+  }
+
+  private async handleSupplementOrderCreation(event: PaymentCompletedEvent) {
+    if (event.type !== 'SUPPLEMENT') return;
+
+    // Idempotent — webhook + client-side verify can both fire for the same payment.
+    const existing = await this.prisma.supplementOrder.findUnique({ where: { paymentId: event.paymentId } });
+    if (existing) return;
+
+    const payment = await this.prisma.payment.findUnique({ where: { id: event.paymentId } });
+    const items = payment?.notes ? JSON.parse(payment.notes) : [];
+    if (!items.length) {
+      this.logger.error(`[payment.completed] Supplement payment ${event.paymentId} has no cart items in notes`);
+      return;
+    }
+
+    const member = await this.prisma.member.findUnique({ where: { id: event.memberId }, select: { userId: true } });
+    if (!member) return;
+
+    await this.supplementsService.fulfillOrder(event.paymentId, member.userId, event.gymId, items);
   }
 
   private async handlePlatformCommission(event: PaymentCompletedEvent) {

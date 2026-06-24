@@ -1,7 +1,7 @@
 {
-  "name": "activefit-backend",
+  "name": "activeboost-backend",
   "version": "1.0.0",
-  "description": "ActiveFit Multi-Tenant Gym Management SaaS - NestJS Backend",
+  "description": "ActiveBoost Multi-Tenant Gym Management SaaS - NestJS Backend",
   "main": "dist/main.js",
   "scripts": {
     "dev": "ts-node -T src/main.ts",

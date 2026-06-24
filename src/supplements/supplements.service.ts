@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PaymentsService } from '../payments/payments.service';
 
 @Injectable()
 export class SupplementsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private paymentsService: PaymentsService) {}
 
   async findAll(query: any, gymId?: string) {
     const { page = 1, limit = 12, search, category } = query;
@@ -43,7 +44,36 @@ export class SupplementsService {
     return this.prisma.supplement.update({ where: { id }, data: { stock: newStock } });
   }
 
-  async createOrder(userId: string, gymId: string, items: Array<{ supplementId: string; quantity: number }>) {
+  // Step 1 of checkout: price the cart server-side (never trust client totals), check stock
+  // is at least available now (best-effort — re-checked atomically again at fulfillment time
+  // since stock can move between checkout and payment completion), then open a Razorpay order.
+  // The cart itself rides along in Payment.notes as JSON — fulfillOrder() reads it back once
+  // payment is confirmed and only then creates the actual SupplementOrder + decrements stock.
+  async createCheckout(userId: string, gymId: string, items: Array<{ supplementId: string; quantity: number }>) {
+    if (!items || items.length === 0) throw new BadRequestException('Cart is empty');
+
+    let totalAmount = 0;
+    for (const item of items) {
+      const supplement = await this.prisma.supplement.findFirst({
+        where: { id: item.supplementId, gymId, isActive: true },
+      });
+      if (!supplement) throw new NotFoundException(`Supplement not found: ${item.supplementId}`);
+      if (supplement.stock < item.quantity) throw new BadRequestException(`Insufficient stock for ${supplement.name}`);
+      const price = supplement.discountPrice ?? supplement.price;
+      totalAmount += price * item.quantity;
+    }
+
+    const orderResult = await this.paymentsService.createRazorpayOrder(totalAmount, userId, gymId, 'SUPPLEMENT');
+    await (this.prisma.payment as any).update({
+      where: { id: orderResult.paymentId },
+      data: { notes: JSON.stringify(items) },
+    });
+    return orderResult;
+  }
+
+  // Called by PaymentEventsHandler once a SUPPLEMENT payment is verified COMPLETED.
+  // Builds the real order + decrements stock atomically, then links it back to the payment.
+  async fulfillOrder(paymentId: string, userId: string, gymId: string, items: Array<{ supplementId: string; quantity: number }>) {
     if (!items || items.length === 0) throw new BadRequestException('Order must contain at least one item');
 
     return this.prisma.$transaction(async (tx) => {
@@ -67,6 +97,7 @@ export class SupplementsService {
         data: {
           userId,
           gymId,
+          paymentId,
           orderNumber: `ORD-${Date.now()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
           totalAmount,
           items: { create: orderItems },

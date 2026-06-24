@@ -61,7 +61,7 @@ async function bootstrap() {
   const expressApp = app.getHttpAdapter().getInstance();
   if (!isProduction) {
     const config = new DocumentBuilder()
-      .setTitle('ActiveFit API')
+      .setTitle('ActiveBoost API')
       .setDescription('Gym Management SaaS Platform API')
       .setVersion('1.0')
       .addBearerAuth()
@@ -74,7 +74,7 @@ async function bootstrap() {
 
   const port = configService.get<number>('PORT', 3001);
   await app.listen(port);
-  console.log(`ActiveFit API running on: http://localhost:${port}/api/v1`);
+  console.log(`ActiveBoost API running on: http://localhost:${port}/api/v1`);
   console.log(`Swagger docs: http://localhost:${port}/api/docs`);
   console.log(`Swagger redirect: http://localhost:${port}/swagger -> /api/docs`);
 }

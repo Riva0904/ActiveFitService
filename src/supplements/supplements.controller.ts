@@ -38,9 +38,9 @@ export class SupplementsController {
     return this.supplementsService.create({ ...body, gymId: user.gymId });
   }
 
-  @Post('order')
-  createOrder(@Body() body: { items: any[] }, @CurrentUser() user: any) {
-    return this.supplementsService.createOrder(user.id, user.gymId, body.items);
+  @Post('checkout')
+  createCheckout(@Body() body: { items: any[] }, @CurrentUser() user: any) {
+    return this.supplementsService.createCheckout(user.id, user.gymId, body.items);
   }
 
   @Patch(':id')

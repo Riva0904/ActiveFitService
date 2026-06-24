@@ -170,6 +170,37 @@ export class MembershipsService {
     });
   }
 
+  // Called by PaymentEventsHandler once a MEMBERSHIP payment is verified COMPLETED —
+  // this is the only place a member's own purchase/renewal actually takes effect.
+  // Extends the latest subscription if one exists (covers both "renew same plan" and
+  // "switch plan"), otherwise creates the member's first subscription.
+  async activateFromPayment(userId: string, gymId: string, planId: string, amount: number) {
+    const member = await this.prisma.member.findFirst({ where: { userId, gymId } });
+    if (!member) return;
+    const plan = await this.prisma.membershipPlan.findUnique({ where: { id: planId } });
+    if (!plan) return;
+
+    const existing = await this.prisma.memberSubscription.findFirst({
+      where: { memberId: member.id, gymId },
+      orderBy: { endDate: 'desc' },
+    });
+
+    const now = new Date();
+    if (existing) {
+      const startDate = existing.endDate > now ? existing.endDate : now;
+      const endDate = this.calcEndDate(startDate, plan.type);
+      return this.prisma.memberSubscription.update({
+        where: { id: existing.id },
+        data: { planId, startDate, endDate, status: 'ACTIVE', amount },
+      });
+    }
+
+    const endDate = this.calcEndDate(now, plan.type);
+    return this.prisma.memberSubscription.create({
+      data: { memberId: member.id, gymId, planId, status: 'ACTIVE', startDate: now, endDate, amount },
+    });
+  }
+
   async getExpiringMembers(gymId: string, days = 7) {
     const futureDate = new Date(Date.now() + +days * 24 * 60 * 60 * 1000);
     const subs = await this.prisma.memberSubscription.findMany({
