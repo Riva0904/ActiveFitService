@@ -18,6 +18,7 @@ import { TrainersModule } from './trainers/trainers.module';
 import { PtSessionsModule } from './pt-sessions/pt-sessions.module';
 import { PaymentsModule } from './payments/payments.module';
 import { SupplementsModule } from './supplements/supplements.module';
+import { SalaryPayoutsModule } from './salary-payouts/salary-payouts.module';
 import { WorkoutPlansModule } from './workout-plans/workout-plans.module';
 import { DietPlansModule } from './diet-plans/diet-plans.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -73,6 +74,7 @@ import { MobileModule } from './mobile/mobile.module';
     PtSessionsModule,
     PaymentsModule,
     SupplementsModule,
+    SalaryPayoutsModule,
     WorkoutPlansModule,
     DietPlansModule,
     NotificationsModule,

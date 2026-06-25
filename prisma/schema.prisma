@@ -227,6 +227,14 @@ model Gym {
   saasExpiresAt      DateTime?
   razorpayAccountId        String?
   renewalRemindersEnabled  Boolean    @default(true)
+  // Manual UPI payout details — member payments are collected as a plain UPI
+  // QR/intent straight to this VPA (no gateway, no KYC), gym admin confirms
+  // receipt manually after checking their own bank/UPI app.
+  payoutUpiVpa             String?
+  payoutAccountHolder      String?
+  payoutBankAccountNumber  String?
+  payoutBankIfsc           String?
+  payoutPhone              String?
   createdAt                DateTime   @default(now())
   updatedAt                DateTime   @updatedAt
   deletedAt                DateTime?
@@ -256,6 +264,7 @@ model Gym {
   supplementOrders   SupplementOrder[]
   promoCodes         PromoCode[]
   invoices           Invoice[]
+  salaryPayouts      SalaryPayout[]
 
   @@index([status])
   @@index([saasStatus])
@@ -329,6 +338,9 @@ model User {
   isPhoneVerified     Boolean   @default(false)
   lastLoginAt         DateTime?
   refreshToken        String?
+  // Manual UPI payout — same record-only model as Gym's: gym admin pays salary
+  // straight to this VPA via their own banking, then marks the payout Paid.
+  payoutUpiVpa        String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime?
@@ -337,6 +349,7 @@ model User {
   member              Member?
   trainer             Trainer?
   staff               Staff?
+  salaryPayouts       SalaryPayout[]
   otpCodes            OtpCode[]
   auditLogs           AuditLog[]
   notifications       Notification[]
@@ -568,6 +581,7 @@ model Payment {
   method             PaymentMethod     @default(CASH)
   razorpayOrderId    String?
   razorpayPaymentId  String?
+  memberConfirmedAt  DateTime?
   invoiceUrl         String?
   notes              String?
   promoCodeId        String?
@@ -1108,4 +1122,33 @@ model RevokedToken {
 
   @@index([expiresAt])
   @@map("revoked_tokens")
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+}
+
+// Record-only salary payout: gym admin transfers money to the trainer/staff's
+// own UPI/bank manually (outside this app), then marks the record Paid here
+// purely for audit history. No gateway, no automated bank movement.
+model SalaryPayout {
+  id          String       @id @default(uuid())
+  gymId       String
+  userId      String
+  amount      Float
+  periodLabel String
+  status      PayoutStatus @default(PENDING)
+  notes       String?
+  paidAt      DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  gym         Gym          @relation(fields: [gymId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@index([gymId])
+  @@index([userId])
+  @@index([gymId, status])
+  @@map("salary_payouts")
 }

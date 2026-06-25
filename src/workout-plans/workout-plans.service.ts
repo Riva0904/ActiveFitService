@@ -112,12 +112,12 @@ export class WorkoutPlansService {
     return (this.prisma.workoutPlan as any).update({ where: { id }, data: { name, goal, description, price, durationDays, durationWeeks, difficulty } });
   }
 
-  async purchasePackage(planId: string, userId: string, gymId: string) {
+  async purchasePackage(planId: string, userId: string, gymId: string, useUpi = false) {
     const plan: any = await (this.prisma.workoutPlan as any).findFirst({ where: { id: planId, gymId, isPremium: true, deletedAt: null } });
     if (!plan) throw new NotFoundException('Workout plan not found');
     if (!plan.price || plan.price <= 0) throw new ForbiddenException('This plan is not available for purchase');
 
-    const orderResult = await this.paymentsService.createRazorpayOrder(plan.price, userId, gymId, 'WORKOUT_PLAN');
+    const orderResult = await this.paymentsService.createRazorpayOrder(plan.price, userId, gymId, 'WORKOUT_PLAN', undefined, undefined, undefined, useUpi);
     await (this.prisma.payment as any).update({ where: { id: orderResult.paymentId }, data: { workoutPlanId: planId } });
 
     return orderResult;

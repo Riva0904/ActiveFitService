@@ -39,8 +39,8 @@ export class SupplementsController {
   }
 
   @Post('checkout')
-  createCheckout(@Body() body: { items: any[] }, @CurrentUser() user: any) {
-    return this.supplementsService.createCheckout(user.id, user.gymId, body.items);
+  createCheckout(@Body() body: { items: any[]; useUpi?: boolean }, @CurrentUser() user: any) {
+    return this.supplementsService.createCheckout(user.id, user.gymId, body.items, !!body.useUpi);
   }
 
   @Patch(':id')

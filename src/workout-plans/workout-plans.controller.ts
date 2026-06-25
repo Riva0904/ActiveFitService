@@ -60,7 +60,7 @@ export class WorkoutPlansController {
   @Post('packages/:id/buy')
   @UseGuards(RolesGuard)
   @Roles(Role.MEMBER)
-  buyPackage(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.workoutPlansService.purchasePackage(id, user.id, user.gymId);
+  buyPackage(@Param('id') id: string, @Body() body: { useUpi?: boolean }, @CurrentUser() user: any) {
+    return this.workoutPlansService.purchasePackage(id, user.id, user.gymId, !!body?.useUpi);
   }
 }

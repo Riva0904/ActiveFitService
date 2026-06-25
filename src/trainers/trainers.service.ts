@@ -27,7 +27,7 @@ export class TrainersService {
         take: +limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, avatar: true, isActive: true } },
+          user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, avatar: true, isActive: true, payoutUpiVpa: true } },
           _count: { select: { memberAssignments: true } },
         },
       }),

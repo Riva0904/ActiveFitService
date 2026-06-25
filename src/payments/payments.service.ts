@@ -79,6 +79,7 @@ export class PaymentsService {
     promoCode?: string,
     referralCreditToApply?: number,
     membershipPlanId?: string,
+    useManualUpi = false,
   ) {
     const member = await this.prisma.member.findFirst({ where: { userId, gymId } });
     if (!member) throw new BadRequestException('Member not found');
@@ -122,6 +123,30 @@ export class PaymentsService {
     }
 
     const finalAmount = Math.max(amount - discountAmount, 1);
+
+    // Manual UPI: no gateway involved — member pays the gym's own VPA directly,
+    // gym admin confirms receipt by hand. No razorpayOrderId, nothing to verify
+    // cryptographically; completion happens via confirmManualPayment() instead.
+    if (useManualUpi) {
+      const gym = await this.prisma.gym.findUnique({ where: { id: gymId }, select: { payoutUpiVpa: true, name: true } });
+      if (!gym?.payoutUpiVpa) throw new BadRequestException('This gym has not set up UPI payouts yet');
+
+      const payment = await this.prisma.payment.create({
+        data: {
+          amount: finalAmount,
+          discountAmount,
+          type: type as any,
+          status: 'PENDING',
+          method: 'UPI',
+          memberId: member.id,
+          gymId,
+          promoCodeId: promoCodeId ?? null,
+          membershipPlanId: type === 'MEMBERSHIP' ? membershipPlanId ?? null : null,
+        },
+      });
+
+      return { paymentId: payment.id, amount: finalAmount, originalAmount: amount, discountAmount, currency: 'INR', vpa: gym.payoutUpiVpa, payeeName: gym.name };
+    }
 
     const order = await this.getRazorpay().orders.create({
       amount: Math.round(finalAmount * 100),
@@ -188,7 +213,14 @@ export class PaymentsService {
       newValues: { razorpayPaymentId, status: 'COMPLETED' },
     });
 
-    // Emit domain event — handlers in diet, referral, commission modules subscribe independently
+    this.emitPaymentCompleted(payment);
+
+    return verified;
+  }
+
+  private emitPaymentCompleted(payment: { id: string; gymId: string; memberId: string; type: string; amount: number; promoCodeId?: string | null }) {
+    // Emit domain event — handlers in diet, referral, commission, supplements, memberships
+    // modules subscribe independently
     this.eventEmitter.emit(
       PAYMENT_COMPLETED,
       new PaymentCompletedEvent(
@@ -203,8 +235,63 @@ export class PaymentsService {
         (payment as any).membershipPlanId ?? undefined,
       ),
     );
+  }
 
-    return verified;
+  // Member taps "I've Paid" after sending money to the gym's UPI VPA — flags it for
+  // the gym admin's review queue. Does NOT complete the payment; only the admin can.
+  async markMemberPaid(paymentId: string, userId: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.method !== 'UPI') throw new BadRequestException('Not a manual UPI payment');
+
+    const member = await this.prisma.member.findFirst({ where: { userId, gymId: payment.gymId } });
+    if (!member || member.id !== payment.memberId) throw new NotFoundException('Payment not found');
+
+    if (payment.status !== 'PENDING') return payment;
+
+    return this.prisma.payment.update({ where: { id: paymentId }, data: { memberConfirmedAt: new Date() } });
+  }
+
+  // Gym admin confirms they actually received the money in their bank/UPI app.
+  // This is the manual-UPI equivalent of verifyPayment() — same completion + event emit.
+  async confirmManualPayment(paymentId: string, gymId: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.gymId !== gymId) throw new NotFoundException('Payment not found');
+    if (payment.method !== 'UPI') throw new BadRequestException('Not a manual UPI payment');
+    if (payment.status === 'COMPLETED') return payment; // Idempotent
+
+    const result = await this.prisma.payment.updateMany({
+      where: { id: paymentId, status: 'PENDING' },
+      data: { status: 'COMPLETED', paidAt: new Date() },
+    });
+    if (result.count === 0) {
+      return this.prisma.payment.findUnique({ where: { id: paymentId } });
+    }
+    const confirmed = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+
+    await this.auditService.log({
+      gymId: payment.gymId,
+      action: 'MANUAL_UPI_CONFIRMED',
+      entity: 'Payment',
+      entityId: payment.id,
+      newValues: { status: 'COMPLETED' },
+    });
+
+    this.emitPaymentCompleted(payment);
+
+    return confirmed;
+  }
+
+  // Gym admin's queue of member-marked-paid UPI payments awaiting confirmation.
+  async getPendingManualUpiPayments(gymId: string) {
+    return this.prisma.payment.findMany({
+      where: { gymId, method: 'UPI', status: 'PENDING', memberConfirmedAt: { not: null } },
+      orderBy: { memberConfirmedAt: 'asc' },
+      include: {
+        member: { select: { id: true, memberCode: true, user: { select: { firstName: true, lastName: true, phone: true } } } },
+      },
+    });
   }
 
   async handleRazorpayWebhook(rawBody: Buffer, signature: string): Promise<void> {

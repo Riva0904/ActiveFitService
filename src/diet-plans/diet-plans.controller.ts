@@ -55,7 +55,7 @@ export class DietPlansController {
   @Post('packages/:id/buy')
   @UseGuards(RolesGuard)
   @Roles(Role.MEMBER)
-  buyPackage(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.dietPlansService.purchasePackage(id, user.id, user.gymId);
+  buyPackage(@Param('id') id: string, @Body() body: { useUpi?: boolean }, @CurrentUser() user: any) {
+    return this.dietPlansService.purchasePackage(id, user.id, user.gymId, !!body?.useUpi);
   }
 }

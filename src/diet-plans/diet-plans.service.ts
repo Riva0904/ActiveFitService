@@ -106,12 +106,12 @@ export class DietPlansService {
     return (this.prisma.dietPlan as any).update({ where: { id }, data: { name, goal, description, price, durationDays, totalCalories, restrictions } });
   }
 
-  async purchasePackage(planId: string, userId: string, gymId: string) {
+  async purchasePackage(planId: string, userId: string, gymId: string, useUpi = false) {
     const plan: any = await (this.prisma.dietPlan as any).findFirst({ where: { id: planId, gymId, isPremium: true, deletedAt: null } });
     if (!plan) throw new NotFoundException('Diet plan not found');
     if (!plan.price || plan.price <= 0) throw new ForbiddenException('This plan is not available for purchase');
 
-    const orderResult = await this.paymentsService.createRazorpayOrder(plan.price, userId, gymId, 'DIET_PLAN');
+    const orderResult = await this.paymentsService.createRazorpayOrder(plan.price, userId, gymId, 'DIET_PLAN', undefined, undefined, undefined, useUpi);
     // Store dietPlanId on the payment for post-payment actions
     await (this.prisma.payment as any).update({ where: { id: orderResult.paymentId }, data: { dietPlanId: planId } });
 

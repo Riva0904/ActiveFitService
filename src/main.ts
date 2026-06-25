@@ -33,9 +33,12 @@ async function bootstrap() {
   app.use(compression());
   app.use(cookieParser());
 
-  const corsOrigin = configService.get('CORS_ORIGIN', 'http://localhost:3000');
+  const corsOrigins = configService
+    .get('CORS_ORIGIN', 'http://localhost:3000')
+    .split(',')
+    .map((o: string) => o.trim());
   app.enableCors({
-    origin: corsOrigin,
+    origin: corsOrigins,
     credentials: true,
   });
 

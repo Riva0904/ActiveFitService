@@ -27,7 +27,7 @@ export class StaffsService {
         take: +limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, avatar: true, isActive: true } },
+          user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, avatar: true, isActive: true, payoutUpiVpa: true } },
         },
       }),
       this.prisma.staff.count({ where }),
@@ -40,7 +40,7 @@ export class StaffsService {
     const staff = await this.prisma.staff.findUnique({
       where: { id },
       include: {
-        user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, avatar: true, isActive: true } },
+        user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, avatar: true, isActive: true, payoutUpiVpa: true } },
         gym: { select: { id: true, name: true, logo: true } },
       },
     });

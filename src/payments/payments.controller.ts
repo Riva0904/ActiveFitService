@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Post, Body, Query, UseGuards, Headers, Req, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common';
+﻿import { Controller, Get, Post, Body, Param, Query, UseGuards, Headers, Req, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Request } from 'express';
@@ -68,14 +68,14 @@ export class PaymentsController {
   @Post('create-order')
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   createOrder(
-    @Body() body: { amount: number; type: string; promoCode?: string; referralCreditToApply?: number; membershipPlanId?: string },
+    @Body() body: { amount: number; type: string; promoCode?: string; referralCreditToApply?: number; membershipPlanId?: string; useUpi?: boolean },
     @CurrentUser() user: any,
   ) {
     if (body.type !== 'MEMBERSHIP') {
       throw new BadRequestException('Use the dedicated purchase endpoint for this payment type');
     }
     return this.paymentsService.createRazorpayOrder(
-      body.amount, user.id, user.gymId, body.type, body.promoCode, body.referralCreditToApply, body.membershipPlanId,
+      body.amount, user.id, user.gymId, body.type, body.promoCode, body.referralCreditToApply, body.membershipPlanId, !!body.useUpi,
     );
   }
 
@@ -92,5 +92,26 @@ export class PaymentsController {
   @Roles(Role.GYM_ADMIN)
   recordCash(@Body() body: RecordCashPaymentDto, @CurrentUser() user: any) {
     return this.paymentsService.recordCashPayment({ ...body, gymId: user.gymId });
+  }
+
+  // ── Manual UPI (no gateway, gym admin's own VPA) ──────────────────────────
+
+  @Post(':id/mark-paid')
+  markPaid(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.paymentsService.markMemberPaid(id, user.id);
+  }
+
+  @Get('manual-upi/pending')
+  @UseGuards(RolesGuard)
+  @Roles(Role.GYM_ADMIN)
+  getPendingManualUpi(@CurrentUser() user: any) {
+    return this.paymentsService.getPendingManualUpiPayments(user.gymId);
+  }
+
+  @Post(':id/confirm-upi')
+  @UseGuards(RolesGuard)
+  @Roles(Role.GYM_ADMIN)
+  confirmManualUpi(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.paymentsService.confirmManualPayment(id, user.gymId);
   }
 }

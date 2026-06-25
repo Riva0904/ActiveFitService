@@ -49,7 +49,7 @@ export class SupplementsService {
   // since stock can move between checkout and payment completion), then open a Razorpay order.
   // The cart itself rides along in Payment.notes as JSON — fulfillOrder() reads it back once
   // payment is confirmed and only then creates the actual SupplementOrder + decrements stock.
-  async createCheckout(userId: string, gymId: string, items: Array<{ supplementId: string; quantity: number }>) {
+  async createCheckout(userId: string, gymId: string, items: Array<{ supplementId: string; quantity: number }>, useUpi = false) {
     if (!items || items.length === 0) throw new BadRequestException('Cart is empty');
 
     let totalAmount = 0;
@@ -63,7 +63,7 @@ export class SupplementsService {
       totalAmount += price * item.quantity;
     }
 
-    const orderResult = await this.paymentsService.createRazorpayOrder(totalAmount, userId, gymId, 'SUPPLEMENT');
+    const orderResult = await this.paymentsService.createRazorpayOrder(totalAmount, userId, gymId, 'SUPPLEMENT', undefined, undefined, undefined, useUpi);
     await (this.prisma.payment as any).update({
       where: { id: orderResult.paymentId },
       data: { notes: JSON.stringify(items) },

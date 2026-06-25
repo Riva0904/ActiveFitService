@@ -244,6 +244,7 @@ export class UsersService {
         emergencyContact: true,
         isActive: true,
         gymId: true,
+        payoutUpiVpa: true,
         lastLoginAt: true,
         createdAt: true,
         gym: { select: { id: true, name: true } },
