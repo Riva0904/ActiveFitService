@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "ActiveBoost",
+    "slug": "activeboost-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0F0F0F"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.activeboost.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera is used to scan QR codes at the gym entrance.",
+        "NSPhotoLibraryUsageDescription": "Photo library is used to upload profile photos and chat attachments."
+      }
+    },
+    "android": {
+      "package": "com.activeboost.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F0F0F",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-barcode-scanner",
+      "expo-status-bar",
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "activeboost-mobile"
+      }
+    }
+  }
+}
