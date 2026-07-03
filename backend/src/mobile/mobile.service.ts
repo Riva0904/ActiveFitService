@@ -65,17 +65,66 @@ export class MobileService {
     };
   }
 
-  async registerPushToken(userId: string, token: string, platform: 'ios' | 'android') {
-    // Stored in AuditLog until a dedicated PushToken model is added
-    await this.prisma.auditLog.create({
-      data: {
-        action: 'PUSH_TOKEN_REGISTERED',
-        entity: 'PushToken',
-        entityId: userId,
-        newValues: { token, platform, registeredAt: new Date().toISOString() },
-      },
+  async registerPushToken(userId: string, token: string, platform: 'ios' | 'android', deviceId?: string) {
+    await this.prisma.pushToken.upsert({
+      where: { token },
+      update: { userId, platform, deviceId, isActive: true },
+      create: { userId, token, platform, deviceId },
     });
     return { registered: true };
+  }
+
+  async deactivatePushToken(token: string) {
+    await this.prisma.pushToken.updateMany({ where: { token }, data: { isActive: false } });
+    return { deactivated: true };
+  }
+
+  async getTrainerHomeData(userId: string, gymId: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const trainer = await this.prisma.trainer.findFirst({
+      where: { userId, gymId },
+      select: {
+        id: true,
+        _count: { select: { memberAssignments: true } },
+      },
+    });
+
+    const [todaySessions, attendance, unreadCount] = await Promise.all([
+      trainer
+        ? this.prisma.ptSession.findMany({
+            where: { trainerId: trainer.id, scheduledAt: { gte: today, lt: tomorrow } },
+            orderBy: { scheduledAt: 'asc' },
+            take: 5,
+            include: {
+              member: { include: { user: { select: { firstName: true, lastName: true } } } },
+            },
+          })
+        : Promise.resolve([]),
+      this.prisma.attendance.findFirst({
+        where: { userId, gymId, checkInTime: { gte: today }, checkOutTime: null },
+      }),
+      this.prisma.notification.count({ where: { userId, isRead: false } }),
+    ]);
+
+    return {
+      assignedMembersCount: trainer?._count.memberAssignments ?? 0,
+      sessionsToday: todaySessions.length,
+      nextSession: todaySessions[0]
+        ? {
+            id: todaySessions[0].id,
+            memberName: `${todaySessions[0].member.user.firstName} ${todaySessions[0].member.user.lastName}`,
+            scheduledAt: todaySessions[0].scheduledAt,
+            durationMinutes: todaySessions[0].duration,
+          }
+        : null,
+      isCheckedInToday: !!attendance,
+      checkedInAt: attendance?.checkInTime ?? null,
+      unreadNotifications: unreadCount,
+    };
   }
 
   async selfCheckIn(userId: string, gymId: string) {

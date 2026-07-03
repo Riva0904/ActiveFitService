@@ -90,6 +90,23 @@ export class AuthController {
     return { message: 'Token refreshed' };
   }
 
+  // ─── Mobile-specific endpoints (return tokens in body, no cookies) ─────────
+
+  @Post('mobile-login')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { ttl: 1000, limit: 2 }, medium: { ttl: 60000, limit: 10 } })
+  @ApiOperation({ summary: 'Mobile login — returns accessToken + refreshToken in JSON body (no cookies)' })
+  async mobileLogin(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
+  }
+
+  @Post('mobile-refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mobile token refresh — accepts refreshToken in body, returns new tokens in body' })
+  async mobileRefresh(@Body() body: { refreshToken: string }) {
+    return this.authService.refreshTokens(body.refreshToken);
+  }
+
   @Post('resend-otp')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 60000, limit: 3 } })

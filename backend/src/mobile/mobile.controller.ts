@@ -23,13 +23,28 @@ export class MobileController {
 
   /** Register a FCM/APNs push token for this device */
   @Post('push-token')
-  registerPushToken(@CurrentUser() user: any, @Body() body: { token: string; platform: 'ios' | 'android' }) {
-    return this.mobileService.registerPushToken(user.id, body.token, body.platform);
+  registerPushToken(
+    @CurrentUser() user: any,
+    @Body() body: { token: string; platform: 'ios' | 'android'; deviceId?: string },
+  ) {
+    return this.mobileService.registerPushToken(user.id, body.token, body.platform, body.deviceId);
+  }
+
+  /** Deactivate a push token on logout */
+  @Post('push-token/deactivate')
+  deactivatePushToken(@Body() body: { token: string }) {
+    return this.mobileService.deactivatePushToken(body.token);
+  }
+
+  /** Aggregated home screen data for trainers */
+  @Get('trainer-home')
+  getTrainerHomeData(@CurrentUser() user: any) {
+    return this.mobileService.getTrainerHomeData(user.id, user.gymId);
   }
 
   /** Offline-safe check-in: accepts a pre-signed member QR token */
   @Post('checkin')
-  mobileCheckIn(@CurrentUser() user: any, @Body() body: { gymId: string }) {
+  mobileCheckIn(@CurrentUser() user: any, @Body() body: { gymId?: string }) {
     return this.mobileService.selfCheckIn(user.id, body.gymId ?? user.gymId);
   }
 }

@@ -359,6 +359,7 @@ model User {
   attendanceRecords   Attendance[]       @relation("AttendanceUser")
   supplementOrders    SupplementOrder[]
   invoices            Invoice[]          @relation("UserInvoices")
+  pushTokens          PushToken[]
 
   @@index([gymId])
   @@index([role])
@@ -1151,4 +1152,20 @@ model SalaryPayout {
   @@index([userId])
   @@index([gymId, status])
   @@map("salary_payouts")
+}
+
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  platform  String
+  deviceId  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_tokens")
 }
